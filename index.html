@@ -4,8 +4,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>贪吃蛇游戏</title>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js"></script>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+        
+        // Firebase 配置
+        const firebaseConfig = {
+            apiKey: "AIzaSyCzijBiCdpHWCQQlI8Y2Xaf5ve4r2-6oA",
+            authDomain: "snakegame-df627.firebaseapp.com",
+            projectId: "snakegame-df627",
+            storageBucket: "snakegame-df627.firebasestorage.app",
+            messagingSenderId: "1080130902246",
+            appId: "1:1080130902246:web:03a9ecbfde885967a48327",
+            measurementId: "G-8FGH164PS3"
+        };
+
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // 保存分数到云端
+        window.saveScore = async function(playerName, score, gameMode) {
+            try {
+                await addDoc(collection(db, "scores"), {
+                    playerName: playerName || "匿名玩家",
+                    score: score,
+                    gameMode: gameMode,
+                    createdAt: new Date()
+                });
+                console.log("分数保存成功！");
+            } catch (error) {
+                console.error("保存失败:", error);
+            }
+        }
+
+        // 获取排行榜
+        window.getLeaderboard = async function() {
+            try {
+                const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(10));
+                const querySnapshot = await getDocs(q);
+                
+                return querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+            } catch (error) {
+                console.error("获取排行榜失败:", error);
+                return [];
+            }
+        }
+    </script>
     <style>
         * {
             margin: 0;
@@ -189,54 +238,6 @@
     </div>
 
     <script>
-        // Firebase 配置
-        const firebaseConfig = {
-            apiKey: "AIzaSyCzijBiCdpHWCQQlI8Y2Xaf5ve4r2-6oA",
-            authDomain: "snakegame-df627.firebaseapp.com",
-            projectId: "snakegame-df627",
-            storageBucket: "snakegame-df627.firebasestorage.app",
-            messagingSenderId: "1080130902246",
-            appId: "1:1080130902246:web:03a9ecbfde885967a48327",
-            measurementId: "G-8FGH164PS3"
-        };
-
-        // 初始化 Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
-        // 保存分数到云端
-        async function saveScore(playerName, score, gameMode) {
-            try {
-                await db.collection("scores").add({
-                    playerName: playerName || "匿名玩家",
-                    score: score,
-                    gameMode: gameMode,
-                    createdAt: new Date()
-                });
-                console.log("分数保存成功！");
-            } catch (error) {
-                console.error("保存失败:", error);
-            }
-        }
-
-        // 获取排行榜
-        async function getLeaderboard() {
-            try {
-                const snapshot = await db.collection("scores")
-                    .orderBy("score", "desc")
-                    .limit(10)
-                    .get();
-                
-                return snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-            } catch (error) {
-                console.error("获取排行榜失败:", error);
-                return [];
-            }
-        }
-
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const scoreElement = document.getElementById('score');
