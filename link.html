@@ -371,6 +371,8 @@
                     // 设置游戏ID（关键修复）
                     currentRoomId = result.gameId;
                     currentGameId = result.gameId;
+                    window.currentGameId = result.gameId;  // 设置全局变量
+                    console.log('玩家2加入房间 - 设置currentGameId:', result.gameId, 'currentPlayer:', window.currentPlayer);
                     
                     // 玩家2初始化方向
                     myDirection = 'left';
@@ -591,8 +593,13 @@
 
         // 联机对战键盘事件
         document.addEventListener('keydown', function(e) {
-            // 使用 currentRoomId 作为检查条件（更可靠）
-            if (!currentRoomId) return;
+            console.log('键盘事件触发 - key:', e.key, 'currentRoomId:', currentRoomId, 'currentGameId:', window.currentGameId, 'currentPlayer:', window.currentPlayer);
+            
+            // 使用 currentRoomId 作为检查条件
+            if (!currentRoomId) {
+                console.log('键盘事件被阻止: currentRoomId 为空');
+                return;
+            }
             
             if (e.key === ' ') {
                 e.preventDefault();
@@ -618,8 +625,7 @@
             
             if (direction) {
                 myDirection = direction;
-                // 立即发送方向到数据库
-                console.log('发送方向:', direction, '玩家:', currentPlayer);
+                console.log('准备发送方向:', direction, 'myDirection:', myDirection);
                 sendPlayerMove(direction);
             }
         });

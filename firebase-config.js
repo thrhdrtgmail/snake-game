@@ -290,12 +290,26 @@ window.setReady = function(ready) {
 
 // 发送玩家移动
 window.sendPlayerMove = function(direction) {
-    if (!currentGameId || !currentPlayer) return;
+    console.log('sendPlayerMove 被调用 - direction:', direction, 'currentGameId:', currentGameId, 'currentPlayer:', currentPlayer);
     
-    var path = 'games/' + currentGameId + '/snake' + (currentPlayer === 'p1' ? '1' : '2') + '/direction';
+    if (!currentGameId) {
+        console.error('发送方向失败: currentGameId 为空');
+        return;
+    }
+    if (!currentPlayer) {
+        console.error('发送方向失败: currentPlayer 为空');
+        return;
+    }
+    
+    var snakeNum = currentPlayer === 'p1' ? '1' : '2';
+    var path = 'games/' + currentGameId + '/snake' + snakeNum + '/direction';
+    console.log('发送方向到路径:', path);
+    
     realtimeDb.ref(path).set(direction, function(error) {
         if (error) {
             console.error('发送方向失败:', error);
+        } else {
+            console.log('方向发送成功!');
         }
     });
 }
