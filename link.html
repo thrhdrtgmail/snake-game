@@ -685,7 +685,7 @@
                 myDirection = 'left';
             }
             
-            // 双方都运行游戏循环，各自控制自己的蛇
+            // 游戏循环：玩家1负责所有游戏逻辑，玩家2只显示
             onlineGameLoop = setInterval(function() {
                 realtimeDb.ref('games/' + currentGameId).once('value').then(function(snapshot) {
                     var gameData = snapshot.val();
@@ -698,94 +698,90 @@
                     // 获取当前状态
                     var snake1 = gameData.snake1 || { segments: [], direction: 'right' };
                     var snake2 = gameData.snake2 || { segments: [], direction: 'left' };
-                    var food = gameData.food || { x: 10, y: 10 };
+                    var currentFood = gameData.food || { x: 10, y: 10 };
                     
-                    // 更新本地蛇的位置
+                    // 玩家1负责所有游戏逻辑计算
                     if (currentPlayer === 'p1') {
-                        // 玩家1控制蛇1
-                        var dir1 = myDirection || snake1.direction || 'right';
-                        onlineSnake1 = moveSnake(snake1.segments, dir1);
-                        
-                        // 玩家2控制蛇2
+                        // 获取双方方向（从数据库读取）
+                        var dir1 = snake1.direction || 'right';
                         var dir2 = snake2.direction || 'left';
-                        onlineSnake2 = moveSnake(snake2.segments, dir2);
                         
-                        // 检查食物碰撞
-                        var p1Ate = checkCollision(onlineSnake1[0], food);
-                        var p2Ate = checkCollision(onlineSnake2[0], food);
-                        
-                        if (p1Ate) {
-                            food = generateFood(onlineSnake1.concat(onlineSnake2));
-                            realtimeDb.ref('games/' + currentGameId + '/scores/p1').transaction(function(current) {
-                                return (current || 0) + 10;
-                            });
-                        } else {
-                            onlineSnake1.pop();
+                        // 如果是自己（玩家1），使用本地方向覆盖
+                        if (myDirection) {
+                            dir1 = myDirection;
                         }
                         
-                        if (p2Ate) {
-                            food = generateFood(onlineSnake1.concat(onlineSnake2));
-                            realtimeDb.ref('games/' + currentGameId + '/scores/p2').transaction(function(current) {
-                                return (current || 0) + 10;
-                            });
-                        } else {
-                            onlineSnake2.pop();
+                        // 移动蛇（创建新数组，不修改原数组）
+                        var newSnake1 = moveSnake(snake1.segments, dir1);
+                        var newSnake2 = moveSnake(snake2.segments, dir2);
+                        
+                        // 检查食物碰撞（只有蛇头碰到才算吃到）
+                        var p1Ate = checkCollision(newSnake1[0], currentFood);
+                        var p2Ate = checkCollision(newSnake2[0], currentFood);
+                        
+                        // 吃到食物：不弹出尾部（蛇增长）；没吃到：弹出尾部（长度不变）
+                        if (!p1Ate) {
+                            newSnake1.pop();
+                        }
+                        if (!p2Ate) {
+                            newSnake2.pop();
+                        }
+                        
+                        // 如果吃到食物，生成新食物（注意：只能有一个玩家吃到）
+                        var newFood = currentFood;
+                        if (p1Ate || p2Ate) {
+                            newFood = generateFood(newSnake1.concat(newSnake2));
                         }
                         
                         // 检查游戏结束条件
                         var gameOver = false;
                         var winner = null;
                         
-                        if (checkSelfCollision(onlineSnake1)) {
+                        if (checkSelfCollision(newSnake1)) {
                             gameOver = true;
                             winner = 'p2';
                         }
-                        if (checkSelfCollision(onlineSnake2)) {
-                            gameOver = true;
-                            winner = winner ? 'draw' : 'p1';
+                        if (checkSelfCollision(newSnake2)) {
+                            if (gameOver) {
+                                winner = 'draw';
+                            } else {
+                                winner = 'p1';
+                            }
                         }
                         
-                        if (checkSnakeCollision(onlineSnake1, onlineSnake2)) {
+                        if (checkSnakeCollision(newSnake1, newSnake2)) {
                             gameOver = true;
                             winner = 'draw';
                         }
                         
-                        // 简单模式：移除墙壁碰撞检测（穿墙不会死亡）
-                        // if (checkWallCollision(onlineSnake1[0])) {
-                        //     gameOver = true;
-                        //     winner = 'p2';
-                        // }
-                        // if (checkWallCollision(onlineSnake2[0])) {
-                        //     gameOver = true;
-                        //     winner = winner ? 'draw' : 'p1';
-                        // }
-                        
                         var newState = gameOver ? 'ended' : 'playing';
                         
-                        // 更新到数据库
-                        realtimeDb.ref('games/' + currentGameId).update({
-                            snake1: { segments: onlineSnake1, direction: dir1 },
-                            snake2: { segments: onlineSnake2, direction: dir2 },
-                            food: food,
-                            state: newState,
-                            winner: gameOver ? winner : null
-                        });
+                        // 更新本地变量用于显示
+                        onlineSnake1 = newSnake1;
+                        onlineSnake2 = newSnake2;
+                        onlineFood = newFood;
+                        
+                        // 批量更新到数据库（使用一次性更新避免竞态条件）
+                        var updateData = {
+                            snake1: { segments: newSnake1, direction: dir1 },
+                            snake2: { segments: newSnake2, direction: dir2 },
+                            food: newFood,
+                            state: newState
+                        };
+                        if (winner) updateData.winner = winner;
+                        if (p1Ate) updateData['scores/p1'] = (gameData.scores && gameData.scores.p1 || 0) + 10;
+                        if (p2Ate) updateData['scores/p2'] = (gameData.scores && gameData.scores.p2 || 0) + 10;
+                        
+                        realtimeDb.ref('games/' + currentGameId).update(updateData);
+                        
                     } else {
-                        // 玩家2只同步位置，不进行游戏逻辑计算
-                        if (snake1.segments) {
-                            onlineSnake1 = snake1.segments;
-                        }
-                        if (snake2.segments) {
-                            onlineSnake2 = snake2.segments;
-                        }
-                    }
-                    
-                    // 同步食物位置
-                    if (food) {
-                        onlineFood = food;
+                        // 玩家2只同步状态用于显示
+                        onlineSnake1 = snake1.segments || onlineSnake1;
+                        onlineSnake2 = snake2.segments || onlineSnake2;
+                        onlineFood = currentFood;
                     }
                 });
-            }, 80);  // 加快更新频率
+            }, 100);  // 100ms 更新频率
         }
 
         function moveSnake(segments, direction) {
