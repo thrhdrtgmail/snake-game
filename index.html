@@ -1081,7 +1081,34 @@
                     break;
                     
                 case 'ended':
-                    onlineStatus.innerHTML = '<span style="color: #e74c3c;">🏆 游戏结束！</span>';
+                    // 显示胜负结果
+                    var winnerText = '';
+                    var p1Name = gameData.players && gameData.players.p1 ? gameData.players.p1.name : '玩家1';
+                    var p2Name = gameData.players && gameData.players.p2 ? gameData.players.p2.name : '玩家2';
+                    var p1Score = gameData.scores && gameData.scores.p1 ? gameData.scores.p1 : 0;
+                    var p2Score = gameData.scores && gameData.scores.p2 ? gameData.scores.p2 : 0;
+                    
+                    if (gameData.winner === 'p1') {
+                        winnerText = '<span style="color: #3498db; font-size: 1.2em; font-weight: bold;">🎉 ' + p1Name + ' 获胜！</span>';
+                    } else if (gameData.winner === 'p2') {
+                        winnerText = '<span style="color: #e74c3c; font-size: 1.2em; font-weight: bold;">🎉 ' + p2Name + ' 获胜！</span>';
+                    } else if (gameData.winner === 'draw') {
+                        winnerText = '<span style="color: #f39c12; font-size: 1.2em; font-weight: bold;">🤝 平局！</span>';
+                    } else {
+                        // 没有明确获胜者，比较分数
+                        if (p1Score > p2Score) {
+                            winnerText = '<span style="color: #3498db; font-size: 1.2em; font-weight: bold;">🎉 ' + p1Name + ' 获胜！</span>';
+                        } else if (p2Score > p1Score) {
+                            winnerText = '<span style="color: #e74c3c; font-size: 1.2em; font-weight: bold;">� ' + p2Name + ' 获胜！</span>';
+                        } else {
+                            winnerText = '<span style="color: #f39c12; font-size: 1.2em; font-weight: bold;">🤝 平局！</span>';
+                        }
+                    }
+                    
+                    onlineStatus.innerHTML = winnerText + '<br>';
+                    onlineStatus.innerHTML += '<span style="font-size: 1.1em;">' + p1Name + ': ' + p1Score + ' 分</span><br>';
+                    onlineStatus.innerHTML += '<span style="font-size: 1.1em;">' + p2Name + ': ' + p2Score + ' 分</span><br>';
+                    onlineStatus.innerHTML += '<button onclick="leaveRoom()" style="margin-top: 10px; padding: 8px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 15px; cursor: pointer;">🔄 返回房间列表</button>';
                     break;
             }
             
