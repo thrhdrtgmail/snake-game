@@ -217,12 +217,15 @@
     <script src="firebase-config.js"></script>
     <script>
         function loadLeaderboards() {
+            console.log('开始加载排行榜...');
             loadLeaderboard('easy', 'easyLeaderboard');
             loadLeaderboard('hard', 'hardLeaderboard');
         }
 
         function loadLeaderboard(mode, containerId) {
+            console.log('加载排行榜:', mode, containerId);
             getLeaderboard(mode, function(data) {
+                console.log('获取到数据:', mode, data);
                 var container = document.getElementById(containerId);
                 
                 if (data.length === 0) {

@@ -36,11 +36,20 @@ window.saveScore = function(playerName, score, gameMode) {
 
 // 获取排行榜（支持模式筛选）
 window.getLeaderboard = function(gameMode, callback) {
+    console.log('getLeaderboard 被调用, 模式:', gameMode);
+    if (!db) {
+        console.error('Firebase Firestore 未初始化');
+        callback([]);
+        return;
+    }
+    
     db.collection("scores").orderBy("score", "desc").limit(20).get()
         .then(function(querySnapshot) {
+            console.log('查询成功, 文档数量:', querySnapshot.size);
             var leaderboard = [];
             querySnapshot.forEach(function(doc) {
                 var data = doc.data();
+                console.log('文档数据:', data);
                 if (!gameMode || gameMode === 'all' || data.gameMode === gameMode) {
                     leaderboard.push({
                         id: doc.id,
@@ -50,6 +59,7 @@ window.getLeaderboard = function(gameMode, callback) {
                     });
                 }
             });
+            console.log('筛选后数据:', leaderboard);
             callback(leaderboard);
         }).catch(function(error) {
             console.error("获取排行榜失败:", error);
