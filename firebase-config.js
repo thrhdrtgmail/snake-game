@@ -68,55 +68,51 @@ window.getLeaderboard = function(gameMode, callback) {
     
     console.log('开始查询 Firestore...');
     
-    db.collection("scores").orderBy("score", "desc").limit(20).get()
+    // 先不排序查询，避免索引问题
+    db.collection("scores").limit(50).get()
         .then(function(querySnapshot) {
             console.log('查询成功, 文档数量:', querySnapshot.size);
             var leaderboard = [];
             querySnapshot.forEach(function(doc) {
                 var data = doc.data();
                 console.log('文档数据:', data);
-                // 兼容大小写问题
-                var docMode = data.gameMode || data.gamemode || data.mode;
-                if (!gameMode || gameMode === 'all' || docMode === gameMode || docMode === gameMode.toLowerCase() || docMode === gameMode.toUpperCase()) {
+                
+                // 获取游戏模式字段（支持多种命名方式）
+                var docMode = data.gameMode || data.gamemode || data.mode || 'unknown';
+                var playerName = data.playerName || data.name || data.username || '匿名玩家';
+                var score = data.score || data.points || data.scoreValue || 0;
+                
+                // 打印字段用于调试
+                console.log('  - gameMode:', docMode, ', playerName:', playerName, ', score:', score);
+                
+                // 如果没有指定模式或者模式匹配，则添加到列表
+                if (!gameMode || gameMode === 'all' || docMode === gameMode || 
+                    docMode.toLowerCase() === gameMode.toLowerCase()) {
                     leaderboard.push({
                         id: doc.id,
-                        playerName: data.playerName || data.name || '匿名玩家',
-                        score: data.score || 0,
+                        playerName: playerName,
+                        score: score,
                         gameMode: docMode
                     });
+                    console.log('  ✓ 添加到列表');
+                } else {
+                    console.log('  ✗ 模式不匹配:', docMode, 'vs', gameMode);
                 }
             });
+            
+            // 手动按分数排序
+            leaderboard.sort(function(a, b) { return b.score - a.score; });
+            
+            // 限制返回数量
+            leaderboard = leaderboard.slice(0, 20);
+            
             console.log('筛选后数据:', leaderboard);
             callback(leaderboard);
         }).catch(function(error) {
             console.error("获取排行榜失败:", error);
             console.error("错误代码:", error.code);
             console.error("错误信息:", error.message);
-            // 尝试不排序直接查询
-            console.log('尝试不排序查询...');
-            db.collection("scores").limit(20).get()
-                .then(function(querySnapshot) {
-                    console.log('不排序查询成功, 文档数量:', querySnapshot.size);
-                    var leaderboard = [];
-                    querySnapshot.forEach(function(doc) {
-                        var data = doc.data();
-                        var docMode = data.gameMode || data.gamemode || data.mode;
-                        if (!gameMode || gameMode === 'all' || docMode === gameMode) {
-                            leaderboard.push({
-                                id: doc.id,
-                                playerName: data.playerName || data.name || '匿名玩家',
-                                score: data.score || 0,
-                                gameMode: docMode
-                            });
-                        }
-                    });
-                    // 手动排序
-                    leaderboard.sort(function(a, b) { return b.score - a.score; });
-                    callback(leaderboard);
-                }).catch(function(error2) {
-                    console.error("不排序查询也失败:", error2);
-                    callback([]);
-                });
+            callback([]);
         });
 }
 

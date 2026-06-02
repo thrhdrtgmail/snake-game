@@ -242,29 +242,23 @@
             }
             console.log('✅ Firestore 已初始化');
             
-            // 测试添加文档
-            console.log('测试添加文档...');
-            db.collection("scores").add({
-                playerName: "测试用户",
-                score: 100,
-                gameMode: "easy",
-                createdAt: new Date(),
-                testData: true
-            }).then(function(docRef) {
-                console.log('✅ 添加文档成功, ID:', docRef.id);
+            // 只测试查询，不添加记录
+            console.log('测试查询文档...');
+            db.collection("scores").get().then(function(querySnapshot) {
+                console.log('✅ 查询成功, 文档数量:', querySnapshot.size);
                 
-                // 测试查询
-                console.log('测试查询文档...');
-                db.collection("scores").get().then(function(querySnapshot) {
-                    console.log('✅ 查询成功, 文档数量:', querySnapshot.size);
-                    alert('Firestore 连接正常！当前有 ' + querySnapshot.size + ' 条记录');
-                }).catch(function(error) {
-                    console.error('❌ 查询失败:', error);
-                    alert('查询失败: ' + error.message);
-                });
+                // 打印第一条数据查看格式
+                if (querySnapshot.size > 0) {
+                    querySnapshot.forEach(function(doc) {
+                        console.log('文档数据:', doc.data());
+                        return false; // 只打印第一条
+                    });
+                }
+                
+                alert('Firestore 连接正常！当前有 ' + querySnapshot.size + ' 条记录\n\n请查看控制台获取详细数据格式');
             }).catch(function(error) {
-                console.error('❌ 添加文档失败:', error);
-                alert('添加文档失败: ' + error.message + '\n错误代码: ' + error.code);
+                console.error('❌ 查询失败:', error);
+                alert('查询失败: ' + error.message + '\n错误代码: ' + error.code);
             });
         }
 
