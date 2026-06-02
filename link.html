@@ -302,13 +302,16 @@
         const roomIdDisplay = document.getElementById('roomIdDisplay');
 
         // 双人对战相关变量
-        var onlineSnake1 = [];
-        var onlineSnake2 = [];
+        var onlineSnake1 = [{x: 5, y: 10}];
+        var onlineSnake2 = [{x: 14, y: 10}];
         var onlineFood = { x: 10, y: 10 };
         var onlineGameLoop = null;
         var currentRoomId = null;
         var drawLoopId = null;
         var isDrawing = false;
+        var myDirection = null;  // 当前玩家的方向
+        var otherDirection = null; // 对方玩家的方向
+        var lastSyncTime = 0;  // 上次同步时间
 
         // 创建房间
         createRoomBtn.addEventListener('click', function() {
@@ -453,7 +456,7 @@
             currentRoomId = null;
         });
 
-        // 处理联机游戏状态更新
+        // 处理联机游戏状态更新（优化版）
         function handleOnlineGameUpdate(gameData) {
             if (gameData.players) {
                 var p1Ready = gameData.players.p1 && gameData.players.p1.ready;
@@ -477,7 +480,8 @@
                 
                 playerIndicator.style.display = 'flex';
                 
-                if (p1Ready && p2Ready && gameData.state === 'ready' && currentPlayer === 'p1') {
+                if (p1Ready && p2Ready && gameData.state === 'ready') {
+                    // 双方都启动游戏循环
                     startOnlineGameLoop();
                 }
             }
@@ -528,18 +532,25 @@
                     break;
             }
             
-            if (gameData.snake1 && gameData.snake1.segments) {
-                onlineSnake1 = gameData.snake1.segments;
+            // 只同步对方的方向，不同步蛇的位置
+            if (gameData.snake1 && gameData.snake1.direction) {
+                if (currentPlayer === 'p2') {
+                    otherDirection = gameData.snake1.direction;
+                }
             }
-            if (gameData.snake2 && gameData.snake2.segments) {
-                onlineSnake2 = gameData.snake2.segments;
+            if (gameData.snake2 && gameData.snake2.direction) {
+                if (currentPlayer === 'p1') {
+                    otherDirection = gameData.snake2.direction;
+                }
             }
-            if (gameData.food) {
+            
+            // 游戏开始时同步初始食物位置
+            if (gameData.state === 'playing' && gameData.food) {
                 onlineFood = gameData.food;
             }
         }
 
-        // 联机对战键盘事件
+        // 联机对战键盘事件（优化响应速度）
         document.addEventListener('keydown', function(e) {
             if (!isOnlineMode || !currentGameId) return;
             
@@ -551,14 +562,28 @@
             
             var direction = null;
             switch(e.key) {
-                case 'ArrowUp': direction = 'up'; break;
-                case 'ArrowDown': direction = 'down'; break;
-                case 'ArrowLeft': direction = 'left'; break;
-                case 'ArrowRight': direction = 'right'; break;
+                case 'ArrowUp': 
+                    if (myDirection !== 'down') direction = 'up'; 
+                    break;
+                case 'ArrowDown': 
+                    if (myDirection !== 'up') direction = 'down'; 
+                    break;
+                case 'ArrowLeft': 
+                    if (myDirection !== 'right') direction = 'left'; 
+                    break;
+                case 'ArrowRight': 
+                    if (myDirection !== 'left') direction = 'right'; 
+                    break;
             }
             
             if (direction) {
-                sendPlayerMove(direction);
+                myDirection = direction;
+                // 限制同步频率，减少网络请求
+                var now = Date.now();
+                if (now - lastSyncTime > 30) {
+                    sendPlayerMove(direction);
+                    lastSyncTime = now;
+                }
             }
         });
 
@@ -605,89 +630,101 @@
         function startOnlineGameLoop() {
             if (onlineGameLoop) return;
             
-            realtimeDb.ref('games/' + currentGameId).update({
-                snake1: { segments: [{x: 5, y: 10}], direction: 'right' },
-                snake2: { segments: [{x: 14, y: 10}], direction: 'left' },
-                food: { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) },
-                state: 'playing',
-                scores: { p1: 0, p2: 0 }
-            });
-            
+            // 玩家1负责初始化游戏状态
             if (currentPlayer === 'p1') {
-                onlineGameLoop = setInterval(function() {
-                    realtimeDb.ref('games/' + currentGameId).once('value').then(function(snapshot) {
-                        var gameData = snapshot.val();
-                        if (!gameData || gameData.state !== 'playing') {
-                            clearInterval(onlineGameLoop);
-                            onlineGameLoop = null;
-                            return;
-                        }
-                        
-                        var snake1 = gameData.snake1 || { segments: [], direction: 'right' };
-                        var snake2 = gameData.snake2 || { segments: [], direction: 'left' };
-                        var food = gameData.food || { x: 10, y: 10 };
-                        var scores = gameData.scores || { p1: 0, p2: 0 };
-                        
-                        var newSnake1 = moveSnake(snake1.segments, snake1.direction);
-                        var newSnake2 = moveSnake(snake2.segments, snake2.direction);
-                        
-                        var p1Ate = checkCollision(newSnake1[0], food);
-                        if (p1Ate) {
-                            food = generateFood(newSnake1.concat(newSnake2));
-                            scores.p1 = (scores.p1 || 0) + 10;
-                        } else {
-                            newSnake1.pop();
-                        }
-                        
-                        var p2Ate = checkCollision(newSnake2[0], food);
-                        if (p2Ate) {
-                            food = generateFood(newSnake1.concat(newSnake2));
-                            scores.p2 = (scores.p2 || 0) + 10;
-                        } else {
-                            newSnake2.pop();
-                        }
-                        
+                realtimeDb.ref('games/' + currentGameId).update({
+                    snake1: { segments: [{x: 5, y: 10}], direction: 'right' },
+                    snake2: { segments: [{x: 14, y: 10}], direction: 'left' },
+                    food: { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) },
+                    state: 'playing',
+                    scores: { p1: 0, p2: 0 }
+                });
+                
+                myDirection = 'right';
+            } else {
+                myDirection = 'left';
+            }
+            
+            // 双方都在本地运行游戏逻辑（优化响应速度）
+            onlineGameLoop = setInterval(function() {
+                realtimeDb.ref('games/' + currentGameId).once('value').then(function(snapshot) {
+                    var gameData = snapshot.val();
+                    if (!gameData || gameData.state !== 'playing') {
+                        clearInterval(onlineGameLoop);
+                        onlineGameLoop = null;
+                        return;
+                    }
+                    
+                    // 更新本地蛇的位置
+                    if (currentPlayer === 'p1') {
+                        onlineSnake1 = moveSnake(onlineSnake1, myDirection);
+                        onlineSnake2 = moveSnake(onlineSnake2, otherDirection || 'left');
+                    } else {
+                        onlineSnake1 = moveSnake(onlineSnake1, otherDirection || 'right');
+                        onlineSnake2 = moveSnake(onlineSnake2, myDirection);
+                    }
+                    
+                    // 检查食物碰撞
+                    var p1Ate = checkCollision(onlineSnake1[0], onlineFood);
+                    var p2Ate = checkCollision(onlineSnake2[0], onlineFood);
+                    
+                    if (p1Ate) {
+                        onlineFood = generateFood(onlineSnake1.concat(onlineSnake2));
+                        realtimeDb.ref('games/' + currentGameId + '/scores/p1').transaction(function(current) {
+                            return (current || 0) + 10;
+                        });
+                        realtimeDb.ref('games/' + currentGameId + '/food').set(onlineFood);
+                    } else {
+                        onlineSnake1.pop();
+                    }
+                    
+                    if (p2Ate) {
+                        onlineFood = generateFood(onlineSnake1.concat(onlineSnake2));
+                        realtimeDb.ref('games/' + currentGameId + '/scores/p2').transaction(function(current) {
+                            return (current || 0) + 10;
+                        });
+                        realtimeDb.ref('games/' + currentGameId + '/food').set(onlineFood);
+                    } else {
+                        onlineSnake2.pop();
+                    }
+                    
+                    // 检查游戏结束条件（由玩家1判定）
+                    if (currentPlayer === 'p1') {
                         var gameOver = false;
                         var winner = null;
                         
-                        if (checkSelfCollision(newSnake1)) {
+                        if (checkSelfCollision(onlineSnake1)) {
                             gameOver = true;
                             winner = 'p2';
                         }
-                        if (checkSelfCollision(newSnake2)) {
+                        if (checkSelfCollision(onlineSnake2)) {
                             gameOver = true;
                             winner = winner ? 'draw' : 'p1';
                         }
                         
-                        if (checkSnakeCollision(newSnake1, newSnake2)) {
+                        if (checkSnakeCollision(onlineSnake1, onlineSnake2)) {
                             gameOver = true;
                             winner = 'draw';
                         }
                         
-                        if (checkWallCollision(newSnake1[0])) {
+                        if (checkWallCollision(onlineSnake1[0])) {
                             gameOver = true;
                             winner = 'p2';
                         }
-                        if (checkWallCollision(newSnake2[0])) {
+                        if (checkWallCollision(onlineSnake2[0])) {
                             gameOver = true;
                             winner = winner ? 'draw' : 'p1';
                         }
                         
-                        var newState = gameOver ? 'ended' : 'playing';
-                        
-                        realtimeDb.ref('games/' + currentGameId).update({
-                            snake1: { segments: newSnake1, direction: snake1.direction },
-                            snake2: { segments: newSnake2, direction: snake2.direction },
-                            food: food,
-                            scores: scores,
-                            state: newState,
-                            winner: winner
-                        });
-                    });
-                }, 150);
-            }
-            
-            setInterval(drawOnlineGame, 50);
+                        if (gameOver) {
+                            realtimeDb.ref('games/' + currentGameId).update({
+                                state: 'ended',
+                                winner: winner
+                            });
+                        }
+                    }
+                });
+            }, 100);  // 加快游戏循环速度
         }
 
         function moveSnake(segments, direction) {
