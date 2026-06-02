@@ -489,9 +489,13 @@
 
         // 处理联机游戏状态更新（优化版）
         function handleOnlineGameUpdate(gameData) {
+            console.log('handleOnlineGameUpdate 被调用 - state:', gameData.state, 'players:', gameData.players);
+            
             if (gameData.players) {
                 var p1Ready = gameData.players.p1 && gameData.players.p1.ready;
                 var p2Ready = gameData.players.p2 && gameData.players.p2.ready;
+                
+                console.log('玩家状态 - p1Ready:', p1Ready, 'p2Ready:', p2Ready, 'state:', gameData.state);
                 
                 playerIndicator.innerHTML = '';
                 
@@ -671,7 +675,12 @@
         }
 
         function startOnlineGameLoop() {
-            if (onlineGameLoop || gameStarted) return;
+            console.log('startOnlineGameLoop 被调用 - onlineGameLoop:', onlineGameLoop, 'gameStarted:', gameStarted);
+            
+            if (onlineGameLoop || gameStarted) {
+                console.log('游戏循环已存在或已启动，跳过');
+                return;
+            }
             
             gameStarted = true;
             
