@@ -38,24 +38,23 @@
 
         // 获取排行榜（支持模式筛选）
         window.getLeaderboard = function(gameMode, callback) {
-            var queryRef = db.collection("scores").orderBy("score", "desc").limit(10);
-            
-            if (gameMode && gameMode !== 'all') {
-                queryRef = queryRef.where("gameMode", "==", gameMode);
-            }
-            
-            queryRef.get()
+            db.collection("scores").orderBy("score", "desc").limit(20).get()
                 .then(function(querySnapshot) {
                     var leaderboard = [];
                     querySnapshot.forEach(function(doc) {
-                        leaderboard.push({
-                            id: doc.id,
-                            playerName: doc.data().playerName,
-                            score: doc.data().score,
-                            gameMode: doc.data().gameMode
-                        });
+                        var data = doc.data();
+                        // 前端筛选模式
+                        if (!gameMode || gameMode === 'all' || data.gameMode === gameMode) {
+                            leaderboard.push({
+                                id: doc.id,
+                                playerName: data.playerName,
+                                score: data.score,
+                                gameMode: data.gameMode
+                            });
+                        }
                     });
-                    callback(leaderboard);
+                    // 限制只返回前10条
+                    callback(leaderboard.slice(0, 10));
                 })
                 .catch(function(error) {
                     console.error("获取排行榜失败:", error);
@@ -220,6 +219,39 @@
             background: #4ecca3;
             color: #1a1a2e;
         }
+        
+        .leaderboard-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 200px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .leaderboard-rank {
+            font-weight: bold;
+            color: #4ecca3;
+            margin-right: 10px;
+        }
+        
+        .leaderboard-name {
+            flex: 1;
+            text-align: left;
+        }
+        
+        .leaderboard-score {
+            color: #4ecca3;
+            font-weight: bold;
+            margin-left: 10px;
+        }
     </style>
 </head>
 <body>
@@ -241,13 +273,17 @@
             <button class="control-btn" id="leaderboardBtn">🏆 排行榜</button>
         </div>
         <div id="leaderboard" style="display: none; margin-top: 20px; color: #fff;">
-            <h3 style="color: #4ecca3; margin-bottom: 10px;">🏆 排行榜</h3>
-            <div id="leaderboardFilter" style="margin-bottom: 10px;">
-                <button class="filter-btn active" data-mode="all">全部</button>
-                <button class="filter-btn" data-mode="easy">简单模式</button>
-                <button class="filter-btn" data-mode="hard">困难模式</button>
+            <h3 style="color: #4ecca3; margin-bottom: 15px;">🏆 排行榜</h3>
+            <div style="display: flex; gap: 30px; justify-content: center;">
+                <div class="leaderboard-panel">
+                    <h4 style="color: #3498db; margin-bottom: 10px; text-align: center;">🌊 简单模式</h4>
+                    <div id="easyLeaderboard"></div>
+                </div>
+                <div class="leaderboard-panel">
+                    <h4 style="color: #e74c3c; margin-bottom: 10px; text-align: center;">🔥 困难模式</h4>
+                    <div id="hardLeaderboard"></div>
+                </div>
             </div>
-            <div id="leaderboardList"></div>
         </div>
         <div class="controls">
             <p>使用方向键 ↑ ↓ ← → 控制蛇的移动</p>
@@ -268,7 +304,8 @@
         const currentModeElement = document.getElementById('currentMode');
         const leaderboardBtn = document.getElementById('leaderboardBtn');
         const leaderboardElement = document.getElementById('leaderboard');
-        const leaderboardListElement = document.getElementById('leaderboardList');
+        const easyLeaderboardElement = document.getElementById('easyLeaderboard');
+        const hardLeaderboardElement = document.getElementById('hardLeaderboard');
 
         const gridSize = 20;
         const tileCount = canvas.width / gridSize;
@@ -454,18 +491,32 @@
             currentModeElement.textContent = '当前模式：困难模式';
         });
 
-        function loadLeaderboard(filterMode) {
-            getLeaderboard(filterMode, function(leaderboard) {
-                if (leaderboard.length > 0) {
-                    leaderboardListElement.innerHTML = leaderboard.map((item, index) => {
-                        return '<div style="display: flex; justify-content: space-between; padding: 5px 10px; border-bottom: 1px solid #333;">' +
-                            '<span>' + (index + 1) + '. ' + item.playerName + '</span>' +
-                            '<span style="color: #4ecca3; font-weight: bold;">' + item.score + '分</span>' +
-                            '<span style="font-size: 0.8em; color: #888;">' + (item.gameMode === 'easy' ? '简单' : '困难') + '</span>' +
+        function loadLeaderboards() {
+            getLeaderboard('easy', function(easyData) {
+                if (easyData.length > 0) {
+                    easyLeaderboardElement.innerHTML = easyData.map((item, index) => {
+                        return '<div class="leaderboard-item">' +
+                            '<span class="leaderboard-rank">' + (index + 1) + '</span>' +
+                            '<span class="leaderboard-name">' + item.playerName + '</span>' +
+                            '<span class="leaderboard-score">' + item.score + '</span>' +
                             '</div>';
                     }).join('');
                 } else {
-                    leaderboardListElement.innerHTML = '<p style="color: #888;">暂无数据</p>';
+                    easyLeaderboardElement.innerHTML = '<p style="color: #888; text-align: center;">暂无数据</p>';
+                }
+            });
+            
+            getLeaderboard('hard', function(hardData) {
+                if (hardData.length > 0) {
+                    hardLeaderboardElement.innerHTML = hardData.map((item, index) => {
+                        return '<div class="leaderboard-item">' +
+                            '<span class="leaderboard-rank">' + (index + 1) + '</span>' +
+                            '<span class="leaderboard-name">' + item.playerName + '</span>' +
+                            '<span class="leaderboard-score">' + item.score + '</span>' +
+                            '</div>';
+                    }).join('');
+                } else {
+                    hardLeaderboardElement.innerHTML = '<p style="color: #888; text-align: center;">暂无数据</p>';
                 }
             });
         }
@@ -476,19 +527,11 @@
             if (leaderboardElement.style.display === 'none') {
                 leaderboardElement.style.display = 'block';
                 leaderboardBtn.textContent = '🔽 收起排行榜';
-                loadLeaderboard('all');
+                loadLeaderboards();
             } else {
                 leaderboardElement.style.display = 'none';
                 leaderboardBtn.textContent = '🏆 排行榜';
             }
-        });
-
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                loadLeaderboard(btn.dataset.mode);
-            });
         });
 
         drawGame();
