@@ -366,8 +366,30 @@
                     roomList.style.display = 'none';
                     leaveRoomBtn.style.display = 'inline-block';
                     
+                    // 玩家2初始化方向
+                    myDirection = 'left';
+                    
+                    // 启动绘制循环
                     startDrawLoop();
+                    
+                    // 监听房间状态
                     listenToGame(result.gameId, handleOnlineGameUpdate);
+                    
+                    // 同步初始游戏状态
+                    realtimeDb.ref('games/' + result.gameId).once('value').then(function(snapshot) {
+                        var gameData = snapshot.val();
+                        if (gameData) {
+                            if (gameData.snake1 && gameData.snake1.segments) {
+                                onlineSnake1 = gameData.snake1.segments;
+                            }
+                            if (gameData.snake2 && gameData.snake2.segments) {
+                                onlineSnake2 = gameData.snake2.segments;
+                            }
+                            if (gameData.food) {
+                                onlineFood = gameData.food;
+                            }
+                        }
+                    });
                 }).catch(function(error) {
                     onlineStatus.innerHTML = '<span style="color: #e74c3c;">加入失败: ' + error + '</span>';
                 });
@@ -532,20 +554,30 @@
                     break;
             }
             
-            // 只同步对方的方向，不同步蛇的位置
-            if (gameData.snake1 && gameData.snake1.direction) {
-                if (currentPlayer === 'p2') {
-                    otherDirection = gameData.snake1.direction;
+            // 同步方向和蛇的位置（玩家2需要获取蛇的初始位置）
+            if (gameData.snake1) {
+                if (gameData.snake1.direction) {
+                    if (currentPlayer === 'p2') {
+                        otherDirection = gameData.snake1.direction;
+                    }
+                }
+                if (gameData.snake1.segments) {
+                    onlineSnake1 = gameData.snake1.segments;
                 }
             }
-            if (gameData.snake2 && gameData.snake2.direction) {
-                if (currentPlayer === 'p1') {
-                    otherDirection = gameData.snake2.direction;
+            if (gameData.snake2) {
+                if (gameData.snake2.direction) {
+                    if (currentPlayer === 'p1') {
+                        otherDirection = gameData.snake2.direction;
+                    }
+                }
+                if (gameData.snake2.segments) {
+                    onlineSnake2 = gameData.snake2.segments;
                 }
             }
             
-            // 游戏开始时同步初始食物位置
-            if (gameData.state === 'playing' && gameData.food) {
+            // 同步食物位置
+            if (gameData.food) {
                 onlineFood = gameData.food;
             }
         }
@@ -632,10 +664,14 @@
             
             // 玩家1负责初始化游戏状态
             if (currentPlayer === 'p1') {
+                onlineSnake1 = [{x: 5, y: 10}];
+                onlineSnake2 = [{x: 14, y: 10}];
+                onlineFood = { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) };
+                
                 realtimeDb.ref('games/' + currentGameId).update({
-                    snake1: { segments: [{x: 5, y: 10}], direction: 'right' },
-                    snake2: { segments: [{x: 14, y: 10}], direction: 'left' },
-                    food: { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) },
+                    snake1: { segments: onlineSnake1, direction: 'right' },
+                    snake2: { segments: onlineSnake2, direction: 'left' },
+                    food: onlineFood,
                     state: 'playing',
                     scores: { p1: 0, p2: 0 }
                 });
@@ -653,6 +689,11 @@
                         clearInterval(onlineGameLoop);
                         onlineGameLoop = null;
                         return;
+                    }
+                    
+                    // 同步食物位置
+                    if (gameData.food) {
+                        onlineFood = gameData.food;
                     }
                     
                     // 更新本地蛇的位置
