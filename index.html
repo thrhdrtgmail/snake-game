@@ -7,20 +7,29 @@
     <!-- 使用 Firebase 8.x CDN -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <script>
         // Firebase 配置
         var firebaseConfig = {
-            apiKey: "AIzaSyCzijBiCdpHWCQQlI8Y2Xaf5ve4r2-6oA",
+            apiKey: "AIzaSyCZijBiCDp6HWCQQlI8Y2Xaf5ve4r2-6oA",
             authDomain: "snakegame-df627.firebaseapp.com",
+            databaseURL: "https://snakegame-df627-default-rtdb.asia-southeast1.firebasedatabase.app",
             projectId: "snakegame-df627",
             storageBucket: "snakegame-df627.firebasestorage.app",
             messagingSenderId: "1080130902246",
-            appId: "1:1080130902246:web:03a9ecbfde885967a48327"
+            appId: "1:1080130902246:web:03a9ecbfde885967a48327",
+            measurementId: "G-8FGH164PS3"
         };
 
         // 初始化 Firebase
         firebase.initializeApp(firebaseConfig);
         var db = firebase.firestore();
+        var realtimeDb = firebase.database();
+        
+        // 联机对战相关变量
+        var currentGameId = null;
+        var currentPlayer = null; // 'p1' or 'p2'
+        var isOnlineMode = false;
 
         // 保存分数到云端
         window.saveScore = function(playerName, score, gameMode) {
@@ -61,6 +70,143 @@
                     callback([]);
                 });
         }
+        
+        // ==================== 联机对战功能 ====================
+        
+        // 创建房间
+        window.createRoom = function(playerName) {
+            return new Promise(function(resolve, reject) {
+                var gameRef = realtimeDb.ref('games').push();
+                var gameId = gameRef.key;
+                
+                gameRef.set({
+                    state: 'waiting',
+                    players: {
+                        p1: {
+                            id: gameId + '_p1',
+                            name: playerName || '玩家1',
+                            ready: false
+                        },
+                        p2: null
+                    },
+                    snake1: { segments: [], direction: 'right' },
+                    snake2: { segments: [], direction: 'left' },
+                    food: { x: 10, y: 10 },
+                    scores: { p1: 0, p2: 0 },
+                    createdAt: Date.now()
+                }, function(error) {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        currentGameId = gameId;
+                        currentPlayer = 'p1';
+                        isOnlineMode = true;
+                        resolve({ gameId: gameId, player: 'p1' });
+                    }
+                });
+            });
+        };
+        
+        // 加入房间
+        window.joinRoom = function(gameId, playerName) {
+            return new Promise(function(resolve, reject) {
+                var gameRef = realtimeDb.ref('games/' + gameId);
+                
+                gameRef.once('value', function(snapshot) {
+                    var gameData = snapshot.val();
+                    
+                    if (!gameData) {
+                        reject('房间不存在');
+                        return;
+                    }
+                    
+                    if (gameData.state !== 'waiting') {
+                        reject('房间已满或游戏已开始');
+                        return;
+                    }
+                    
+                    gameRef.update({
+                        'players/p2': {
+                            id: gameId + '_p2',
+                            name: playerName || '玩家2',
+                            ready: false
+                        },
+                        state: 'ready'
+                    }, function(error) {
+                        if (error) {
+                            reject(error);
+                        } else {
+                            currentGameId = gameId;
+                            currentPlayer = 'p2';
+                            isOnlineMode = true;
+                            resolve({ gameId: gameId, player: 'p2' });
+                        }
+                    });
+                });
+            });
+        };
+        
+        // 获取房间列表
+        window.getRooms = function(callback) {
+            realtimeDb.ref('games').orderByChild('state').equalTo('waiting').limitToFirst(10).once('value', function(snapshot) {
+                var rooms = [];
+                snapshot.forEach(function(childSnapshot) {
+                    var roomData = childSnapshot.val();
+                    rooms.push({
+                        id: childSnapshot.key,
+                        players: roomData.players,
+                        createdAt: roomData.createdAt
+                    });
+                });
+                callback(rooms);
+            });
+        };
+        
+        // 设置玩家准备状态
+        window.setReady = function(isReady) {
+            if (!currentGameId || !currentPlayer) return;
+            
+            realtimeDb.ref('games/' + currentGameId + '/players/' + currentPlayer + '/ready').set(isReady);
+        };
+        
+        // 发送玩家操作
+        window.sendPlayerMove = function(direction) {
+            if (!currentGameId || !currentPlayer) return;
+            
+            var snakeKey = currentPlayer === 'p1' ? 'snake1' : 'snake2';
+            realtimeDb.ref('games/' + currentGameId + '/' + snakeKey + '/direction').set(direction);
+        };
+        
+        // 监听游戏状态
+        window.listenToGame = function(gameId, callback) {
+            realtimeDb.ref('games/' + gameId).on('value', function(snapshot) {
+                var gameData = snapshot.val();
+                if (gameData) {
+                    callback(gameData);
+                }
+            });
+        };
+        
+        // 离开房间
+        window.leaveRoom = function() {
+            if (!currentGameId) return;
+            
+            realtimeDb.ref('games/' + currentGameId).off();
+            
+            // 如果是玩家1且房间还在等待状态，删除房间
+            if (currentPlayer === 'p1') {
+                realtimeDb.ref('games/' + currentGameId).once('value', function(snapshot) {
+                    var gameData = snapshot.val();
+                    if (gameData && gameData.state === 'waiting') {
+                        realtimeDb.ref('games/' + currentGameId).remove();
+                    }
+                });
+            }
+            
+            currentGameId = null;
+            currentPlayer = null;
+            isOnlineMode = false;
+        };
     </script>
     <style>
         * {
@@ -258,6 +404,138 @@
             font-weight: bold;
             margin-left: 10px;
         }
+        
+        /* 联机对战样式 */
+        .online-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .online-title {
+            color: #3498db;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 1.3em;
+        }
+        
+        .online-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1em;
+            border-radius: 20px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .online-btn:hover {
+            transform: scale(1.05);
+            background: #2980b9;
+        }
+        
+        .online-btn.create {
+            background: #27ae60;
+        }
+        
+        .online-btn.create:hover {
+            background: #1e8449;
+        }
+        
+        .online-btn.join {
+            background: #f39c12;
+        }
+        
+        .online-btn.join:hover {
+            background: #d68910;
+        }
+        
+        .room-input {
+            padding: 10px;
+            border: 2px solid #4ecca3;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.3);
+            color: white;
+            font-size: 1em;
+            width: 200px;
+            margin: 10px 0;
+        }
+        
+        .room-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        
+        .room-item {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .room-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .room-id {
+            font-family: monospace;
+            color: #4ecca3;
+        }
+        
+        .room-player {
+            color: #888;
+            font-size: 0.9em;
+        }
+        
+        .online-status {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        
+        .status-online {
+            color: #27ae60;
+        }
+        
+        .status-waiting {
+            color: #f39c12;
+        }
+        
+        .player-indicator {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 10px;
+        }
+        
+        .player-tag {
+            padding: 8px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+        }
+        
+        .player-tag.p1 {
+            background: #3498db;
+            color: white;
+        }
+        
+        .player-tag.p2 {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .player-tag.ready {
+            box-shadow: 0 0 10px rgba(39, 174, 96, 0.5);
+        }
+        
+        .player-tag.not-ready {
+            opacity: 0.6;
+        }
     </style>
 </head>
 <body>
@@ -271,20 +549,56 @@
         <!-- 游戏主区域 -->
         <div class="game-container">
             <h1>🐍 贪吃蛇</h1>
+            
+            <!-- 模式选择 -->
             <div class="mode-selector">
                 <button class="mode-btn active" id="easyMode">简单模式</button>
                 <button class="mode-btn" id="hardMode">困难模式</button>
             </div>
             <div class="current-mode" id="currentMode">当前模式：简单模式</div>
+            
+            <!-- 联机对战面板 -->
+            <div class="online-panel">
+                <h3 class="online-title">🎮 联机对战</h3>
+                <div style="text-align: center;">
+                    <input type="text" class="room-input" id="playerNameInput" placeholder="输入你的昵称" value="匿名玩家">
+                    <br>
+                    <button class="online-btn create" id="createRoomBtn">创建房间</button>
+                    <button class="online-btn join" id="joinRoomBtn">加入房间</button>
+                    <input type="text" class="room-input" id="roomIdInput" placeholder="房间ID" style="display: none;">
+                    <button class="online-btn" id="refreshRoomsBtn" style="display: none;">刷新房间列表</button>
+                </div>
+                <div id="roomList" class="room-list" style="display: none;"></div>
+                <div id="onlineStatus" class="online-status"></div>
+                <div id="playerIndicator" class="player-indicator" style="display: none;"></div>
+                <button class="online-btn" id="leaveRoomBtn" style="display: none;">离开房间</button>
+            </div>
+            
+            <!-- 分数显示 -->
             <div class="score-board">得分: <span class="score" id="score">0</span></div>
+            
+            <!-- 双人对战分数 -->
+            <div id="onlineScoreBoard" style="display: none; color: #fff; font-size: 1.2em; margin-bottom: 10px;">
+                <span style="color: #3498db;">玩家1:</span> <span id="p1Score">0</span> 
+                <span style="margin: 0 20px;">VS</span> 
+                <span style="color: #e74c3c;">玩家2:</span> <span id="p2Score">0</span>
+            </div>
+            
+            <!-- 游戏画布 -->
             <canvas id="gameCanvas" width="400" height="400"></canvas>
+            
+            <!-- 游戏状态 -->
             <div class="game-over" id="gameOver">游戏结束！</div>
             <div class="game-paused" id="gamePaused">⏸️ 游戏暂停</div>
+            
+            <!-- 游戏控制按钮 -->
             <button class="btn" id="startBtn">开始游戏</button>
             <div class="game-controls">
                 <button class="control-btn" id="pauseBtn">⏸️ 暂停</button>
                 <button class="control-btn exit" id="exitBtn">❌ 退出</button>
             </div>
+            
+            <!-- 操作提示 -->
             <div class="controls">
                 <p>使用方向键 ↑ ↓ ← → 控制蛇的移动</p>
             </div>
@@ -538,6 +852,300 @@
         }
 
         drawGame();
+        
+        // ==================== 联机对战事件处理 ====================
+        
+        // 获取 DOM 元素
+        var playerNameInput = document.getElementById('playerNameInput');
+        var createRoomBtn = document.getElementById('createRoomBtn');
+        var joinRoomBtn = document.getElementById('joinRoomBtn');
+        var roomIdInput = document.getElementById('roomIdInput');
+        var refreshRoomsBtn = document.getElementById('refreshRoomsBtn');
+        var roomList = document.getElementById('roomList');
+        var onlineStatus = document.getElementById('onlineStatus');
+        var playerIndicator = document.getElementById('playerIndicator');
+        var leaveRoomBtn = document.getElementById('leaveRoomBtn');
+        var onlineScoreBoard = document.getElementById('onlineScoreBoard');
+        var p1ScoreElement = document.getElementById('p1Score');
+        var p2ScoreElement = document.getElementById('p2Score');
+        
+        // 双人对战相关变量
+        var onlineSnake1 = [];
+        var onlineSnake2 = [];
+        var onlineFood = { x: 10, y: 10 };
+        var onlineGameLoop = null;
+        
+        // 创建房间
+        createRoomBtn.addEventListener('click', function() {
+            var playerName = playerNameInput.value || '匿名玩家';
+            
+            createRoom(playerName).then(function(result) {
+                onlineStatus.innerHTML = '<span class="status-waiting">🏠 房间创建成功！房间ID: ' + result.gameId + '</span>';
+                onlineStatus.innerHTML += '<br><span class="status-waiting">等待其他玩家加入...</span>';
+                
+                createRoomBtn.style.display = 'none';
+                joinRoomBtn.style.display = 'none';
+                roomIdInput.style.display = 'none';
+                refreshRoomsBtn.style.display = 'none';
+                roomList.style.display = 'none';
+                leaveRoomBtn.style.display = 'inline-block';
+                
+                // 监听房间状态
+                listenToGame(result.gameId, handleOnlineGameUpdate);
+            }).catch(function(error) {
+                onlineStatus.innerHTML = '<span style="color: #e74c3c;">创建房间失败: ' + error + '</span>';
+            });
+        });
+        
+        // 加入房间
+        joinRoomBtn.addEventListener('click', function() {
+            if (roomIdInput.style.display === 'none') {
+                // 显示房间输入框和房间列表
+                roomIdInput.style.display = 'inline-block';
+                refreshRoomsBtn.style.display = 'inline-block';
+                roomList.style.display = 'block';
+                refreshRoomList();
+            } else {
+                // 尝试加入房间
+                var roomId = roomIdInput.value.trim();
+                var playerName = playerNameInput.value || '匿名玩家';
+                
+                if (!roomId) {
+                    onlineStatus.innerHTML = '<span style="color: #e74c3c;">请输入房间ID</span>';
+                    return;
+                }
+                
+                joinRoom(roomId, playerName).then(function(result) {
+                    onlineStatus.innerHTML = '<span class="status-online">✅ 成功加入房间！</span>';
+                    
+                    createRoomBtn.style.display = 'none';
+                    joinRoomBtn.style.display = 'none';
+                    roomIdInput.style.display = 'none';
+                    refreshRoomsBtn.style.display = 'none';
+                    roomList.style.display = 'none';
+                    leaveRoomBtn.style.display = 'inline-block';
+                    
+                    // 监听房间状态
+                    listenToGame(result.gameId, handleOnlineGameUpdate);
+                }).catch(function(error) {
+                    onlineStatus.innerHTML = '<span style="color: #e74c3c;">加入失败: ' + error + '</span>';
+                });
+            }
+        });
+        
+        // 刷新房间列表
+        refreshRoomsBtn.addEventListener('click', refreshRoomList);
+        
+        function refreshRoomList() {
+            getRooms(function(rooms) {
+                if (rooms.length === 0) {
+                    roomList.innerHTML = '<p style="color: #888; text-align: center;">暂无可用房间</p>';
+                    return;
+                }
+                
+                roomList.innerHTML = rooms.map(function(room) {
+                    return '<div class="room-item" onclick="joinRoomDirect(\'' + room.id + '\')">' +
+                        '<div class="room-id">房间ID: ' + room.id + '</div>' +
+                        '<div class="room-player">创建者: ' + (room.players.p1 ? room.players.p1.name : '未知') + '</div>' +
+                        '</div>';
+                }).join('');
+            });
+        }
+        
+        // 直接加入房间
+        window.joinRoomDirect = function(roomId) {
+            roomIdInput.value = roomId;
+            var playerName = playerNameInput.value || '匿名玩家';
+            
+            joinRoom(roomId, playerName).then(function(result) {
+                onlineStatus.innerHTML = '<span class="status-online">✅ 成功加入房间！</span>';
+                
+                createRoomBtn.style.display = 'none';
+                joinRoomBtn.style.display = 'none';
+                roomIdInput.style.display = 'none';
+                refreshRoomsBtn.style.display = 'none';
+                roomList.style.display = 'none';
+                leaveRoomBtn.style.display = 'inline-block';
+                
+                listenToGame(result.gameId, handleOnlineGameUpdate);
+            }).catch(function(error) {
+                onlineStatus.innerHTML = '<span style="color: #e74c3c;">加入失败: ' + error + '</span>';
+            });
+        };
+        
+        // 离开房间
+        leaveRoomBtn.addEventListener('click', function() {
+            leaveRoom();
+            
+            onlineStatus.innerHTML = '';
+            playerIndicator.innerHTML = '';
+            playerIndicator.style.display = 'none';
+            onlineScoreBoard.style.display = 'none';
+            
+            createRoomBtn.style.display = 'inline-block';
+            joinRoomBtn.style.display = 'inline-block';
+            leaveRoomBtn.style.display = 'none';
+            
+            // 停止联机游戏循环
+            if (onlineGameLoop) {
+                clearInterval(onlineGameLoop);
+                onlineGameLoop = null;
+            }
+            
+            // 重置为单人游戏界面
+            initGame();
+            drawGame();
+        });
+        
+        // 处理联机游戏状态更新
+        function handleOnlineGameUpdate(gameData) {
+            // 更新玩家状态显示
+            if (gameData.players) {
+                var p1Ready = gameData.players.p1 && gameData.players.p1.ready;
+                var p2Ready = gameData.players.p2 && gameData.players.p2.ready;
+                
+                playerIndicator.innerHTML = '';
+                
+                if (gameData.players.p1) {
+                    playerIndicator.innerHTML += '<div class="player-tag p1 ' + (p1Ready ? 'ready' : 'not-ready') + '">';
+                    playerIndicator.innerHTML += gameData.players.p1.name;
+                    playerIndicator.innerHTML += p1Ready ? ' ✅' : ' ⏳';
+                    playerIndicator.innerHTML += '</div>';
+                }
+                
+                if (gameData.players.p2) {
+                    playerIndicator.innerHTML += '<div class="player-tag p2 ' + (p2Ready ? 'ready' : 'not-ready') + '">';
+                    playerIndicator.innerHTML += gameData.players.p2.name;
+                    playerIndicator.innerHTML += p2Ready ? ' ✅' : ' ⏳';
+                    playerIndicator.innerHTML += '</div>';
+                }
+                
+                playerIndicator.style.display = 'flex';
+            }
+            
+            // 更新分数
+            if (gameData.scores) {
+                p1ScoreElement.textContent = gameData.scores.p1 || 0;
+                p2ScoreElement.textContent = gameData.scores.p2 || 0;
+                onlineScoreBoard.style.display = 'block';
+            }
+            
+            // 处理游戏状态
+            switch(gameData.state) {
+                case 'waiting':
+                    onlineStatus.innerHTML = '<span class="status-waiting">⏳ 等待其他玩家加入...</span>';
+                    break;
+                    
+                case 'ready':
+                    onlineStatus.innerHTML = '<span class="status-online">✅ 双方已就绪！按空格键开始游戏</span>';
+                    break;
+                    
+                case 'playing':
+                    onlineStatus.innerHTML = '<span class="status-online">🎮 游戏进行中</span>';
+                    break;
+                    
+                case 'ended':
+                    onlineStatus.innerHTML = '<span style="color: #e74c3c;">🏆 游戏结束！</span>';
+                    break;
+            }
+            
+            // 更新蛇的位置
+            if (gameData.snake1 && gameData.snake1.segments) {
+                onlineSnake1 = gameData.snake1.segments;
+            }
+            if (gameData.snake2 && gameData.snake2.segments) {
+                onlineSnake2 = gameData.snake2.segments;
+            }
+            if (gameData.food) {
+                onlineFood = gameData.food;
+            }
+        }
+        
+        // 联机对战键盘事件
+        document.addEventListener('keydown', function(e) {
+            if (!isOnlineMode || !currentGameId) return;
+            
+            // 空格键开始游戏（双方就绪后）
+            if (e.key === ' ') {
+                e.preventDefault();
+                setReady(true);
+                return;
+            }
+            
+            // 方向键控制
+            var direction = null;
+            switch(e.key) {
+                case 'ArrowUp':
+                    direction = 'up';
+                    break;
+                case 'ArrowDown':
+                    direction = 'down';
+                    break;
+                case 'ArrowLeft':
+                    direction = 'left';
+                    break;
+                case 'ArrowRight':
+                    direction = 'right';
+                    break;
+            }
+            
+            if (direction) {
+                sendPlayerMove(direction);
+            }
+        });
+        
+        // 绘制联机对战画面
+        function drawOnlineGame() {
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制玩家1的蛇（蓝色）
+            ctx.fillStyle = '#3498db';
+            onlineSnake1.forEach(function(segment, index) {
+                ctx.fillStyle = index === 0 ? '#5dade2' : '#3498db';
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+            });
+            
+            // 绘制玩家2的蛇（红色）
+            ctx.fillStyle = '#e74c3c';
+            onlineSnake2.forEach(function(segment, index) {
+                ctx.fillStyle = index === 0 ? '#ec7063' : '#e74c3c';
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+            });
+            
+            // 绘制食物
+            ctx.fillStyle = '#ff6b6b';
+            ctx.beginPath();
+            ctx.arc(onlineFood.x * gridSize + gridSize / 2, onlineFood.y * gridSize + gridSize / 2, gridSize / 2 - 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // 初始化联机游戏
+        function initOnlineGame() {
+            onlineSnake1 = [{x: 5, y: 10}];
+            onlineSnake2 = [{x: 14, y: 10}];
+            onlineFood = { x: 10, y: 10 };
+            drawOnlineGame();
+        }
+        
+        // 启动联机游戏循环
+        function startOnlineGameLoop() {
+            if (onlineGameLoop) return;
+            
+            // 初始化蛇位置
+            realtimeDb.ref('games/' + currentGameId).update({
+                snake1: { segments: [{x: 5, y: 10}], direction: 'right' },
+                snake2: { segments: [{x: 14, y: 10}], direction: 'left' },
+                food: { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) },
+                state: 'playing',
+                scores: { p1: 0, p2: 0 }
+            });
+            
+            onlineGameLoop = setInterval(drawOnlineGame, 50);
+        }
+        
+        // 页面加载时初始化联机游戏画面
+        initOnlineGame();
     </script>
 </body>
 </html>
