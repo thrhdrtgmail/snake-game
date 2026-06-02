@@ -750,14 +750,15 @@
                             winner = 'draw';
                         }
                         
-                        if (checkWallCollision(onlineSnake1[0])) {
-                            gameOver = true;
-                            winner = 'p2';
-                        }
-                        if (checkWallCollision(onlineSnake2[0])) {
-                            gameOver = true;
-                            winner = winner ? 'draw' : 'p1';
-                        }
+                        // 简单模式：移除墙壁碰撞检测（穿墙不会死亡）
+                        // if (checkWallCollision(onlineSnake1[0])) {
+                        //     gameOver = true;
+                        //     winner = 'p2';
+                        // }
+                        // if (checkWallCollision(onlineSnake2[0])) {
+                        //     gameOver = true;
+                        //     winner = winner ? 'draw' : 'p1';
+                        // }
                         
                         var newState = gameOver ? 'ended' : 'playing';
                         
@@ -799,6 +800,12 @@
                 case 'left': head.x--; break;
                 case 'right': head.x++; break;
             }
+            
+            // 简单模式：穿墙逻辑（从一边出去从另一边进来）
+            if (head.x < 0) head.x = tileCount - 1;
+            if (head.x >= tileCount) head.x = 0;
+            if (head.y < 0) head.y = tileCount - 1;
+            if (head.y >= tileCount) head.y = 0;
             
             newSegments.unshift(head);
             return newSegments;
