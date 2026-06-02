@@ -591,7 +591,8 @@
 
         // 联机对战键盘事件
         document.addEventListener('keydown', function(e) {
-            if (!isOnlineMode || !currentGameId) return;
+            // 使用 currentRoomId 作为检查条件（更可靠）
+            if (!currentRoomId) return;
             
             if (e.key === ' ') {
                 e.preventDefault();
@@ -617,7 +618,8 @@
             
             if (direction) {
                 myDirection = direction;
-                // 立即发送方向到数据库（不限制频率，确保响应速度）
+                // 立即发送方向到数据库
+                console.log('发送方向:', direction, '玩家:', currentPlayer);
                 sendPlayerMove(direction);
             }
         });
@@ -696,28 +698,29 @@
                     }
                     
                     // 获取当前状态
-                    var snake1 = gameData.snake1 || { segments: [], direction: 'right' };
-                    var snake2 = gameData.snake2 || { segments: [], direction: 'left' };
+                    var snake1 = gameData.snake1 || { segments: [{x: 5, y: 10}], direction: 'right' };
+                    var snake2 = gameData.snake2 || { segments: [{x: 14, y: 10}], direction: 'left' };
                     var currentFood = gameData.food || { x: 10, y: 10 };
                     
                     // 玩家1负责所有游戏逻辑计算
                     if (currentPlayer === 'p1') {
-                        // 获取双方方向（从数据库读取）
+                        // 获取双方方向（从数据库读取，这是关键！）
                         var dir1 = snake1.direction || 'right';
                         var dir2 = snake2.direction || 'left';
                         
-                        // 如果是自己（玩家1），使用本地方向覆盖
-                        if (myDirection) {
-                            dir1 = myDirection;
-                        }
+                        console.log('玩家1循环 - 方向:', dir1, dir2);
                         
-                        // 移动蛇（创建新数组，不修改原数组）
+                        // 移动蛇（创建新数组）
                         var newSnake1 = moveSnake(snake1.segments, dir1);
                         var newSnake2 = moveSnake(snake2.segments, dir2);
                         
                         // 检查食物碰撞（只有蛇头碰到才算吃到）
-                        var p1Ate = checkCollision(newSnake1[0], currentFood);
-                        var p2Ate = checkCollision(newSnake2[0], currentFood);
+                        var head1 = newSnake1[0];
+                        var head2 = newSnake2[0];
+                        var p1Ate = (head1.x === currentFood.x && head1.y === currentFood.y);
+                        var p2Ate = (head2.x === currentFood.x && head2.y === currentFood.y);
+                        
+                        console.log('碰撞检测 - p1Ate:', p1Ate, 'p2Ate:', p2Ate);
                         
                         // 吃到食物：不弹出尾部（蛇增长）；没吃到：弹出尾部（长度不变）
                         if (!p1Ate) {
@@ -727,10 +730,11 @@
                             newSnake2.pop();
                         }
                         
-                        // 如果吃到食物，生成新食物（注意：只能有一个玩家吃到）
+                        // 如果吃到食物，生成新食物
                         var newFood = currentFood;
                         if (p1Ate || p2Ate) {
                             newFood = generateFood(newSnake1.concat(newSnake2));
+                            console.log('生成新食物:', newFood);
                         }
                         
                         // 检查游戏结束条件
@@ -742,11 +746,8 @@
                             winner = 'p2';
                         }
                         if (checkSelfCollision(newSnake2)) {
-                            if (gameOver) {
-                                winner = 'draw';
-                            } else {
-                                winner = 'p1';
-                            }
+                            winner = gameOver ? 'draw' : 'p1';
+                            gameOver = true;
                         }
                         
                         if (checkSnakeCollision(newSnake1, newSnake2)) {
@@ -761,7 +762,7 @@
                         onlineSnake2 = newSnake2;
                         onlineFood = newFood;
                         
-                        // 批量更新到数据库（使用一次性更新避免竞态条件）
+                        // 批量更新到数据库
                         var updateData = {
                             snake1: { segments: newSnake1, direction: dir1 },
                             snake2: { segments: newSnake2, direction: dir2 },
@@ -781,7 +782,7 @@
                         onlineFood = currentFood;
                     }
                 });
-            }, 100);  // 100ms 更新频率
+            }, 100);
         }
 
         function moveSnake(segments, direction) {
