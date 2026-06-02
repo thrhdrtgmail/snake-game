@@ -569,6 +569,7 @@
                     <button class="online-btn" id="refreshRoomsBtn" style="display: none;">刷新房间列表</button>
                 </div>
                 <div id="roomList" class="room-list" style="display: none;"></div>
+                <div id="roomIdDisplay" style="display: none; margin-bottom: 10px; text-align: center;"></div>
                 <div id="onlineStatus" class="online-status"></div>
                 <div id="playerIndicator" class="player-indicator" style="display: none;"></div>
                 <button class="online-btn" id="leaveRoomBtn" style="display: none;">离开房间</button>
@@ -868,6 +869,7 @@
         var onlineScoreBoard = document.getElementById('onlineScoreBoard');
         var p1ScoreElement = document.getElementById('p1Score');
         var p2ScoreElement = document.getElementById('p2Score');
+        var roomIdDisplay = document.getElementById('roomIdDisplay');
         
         // 双人对战相关变量
         var onlineSnake1 = [];
@@ -884,11 +886,12 @@
                 // 保存房间ID
                 currentRoomId = result.gameId;
                 
-                // 显示房间ID和复制按钮
-                onlineStatus.innerHTML = '<span class="status-waiting">🏠 房间创建成功！</span><br>';
-                onlineStatus.innerHTML += '<span class="status-online">房间ID: <code style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; color: #4ecca3;">' + result.gameId + '</code></span><br>';
-                onlineStatus.innerHTML += '<button onclick="copyRoomId(\'' + result.gameId + '\')" style="margin-top: 10px; padding: 8px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 15px; cursor: pointer;">📋 复制房间ID</button><br>';
-                onlineStatus.innerHTML += '<span class="status-waiting">等待其他玩家加入...</span>';
+                // 使用单独的元素显示房间ID（不会被状态更新覆盖）
+                roomIdDisplay.innerHTML = '<span class="status-online">房间ID: <code style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; color: #4ecca3; font-size: 1.2em;">' + result.gameId + '</code></span><br>';
+                roomIdDisplay.innerHTML += '<button onclick="copyRoomId(\'' + result.gameId + '\')" style="margin-top: 10px; padding: 8px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 15px; cursor: pointer;">📋 复制房间ID</button>';
+                roomIdDisplay.style.display = 'block';
+                
+                onlineStatus.innerHTML = '<span class="status-waiting">⏳ 等待其他玩家加入...</span>';
                 
                 createRoomBtn.style.display = 'none';
                 joinRoomBtn.style.display = 'none';
@@ -1001,6 +1004,8 @@
             leaveRoom();
             
             onlineStatus.innerHTML = '';
+            roomIdDisplay.innerHTML = '';
+            roomIdDisplay.style.display = 'none';
             playerIndicator.innerHTML = '';
             playerIndicator.style.display = 'none';
             onlineScoreBoard.style.display = 'none';
@@ -1014,6 +1019,9 @@
                 clearInterval(onlineGameLoop);
                 onlineGameLoop = null;
             }
+            
+            // 重置房间ID
+            currentRoomId = null;
             
             // 重置为单人游戏界面
             initGame();
@@ -1044,6 +1052,11 @@
                 }
                 
                 playerIndicator.style.display = 'flex';
+                
+                // 检测双方就绪，由玩家1启动游戏
+                if (p1Ready && p2Ready && gameData.state === 'ready' && currentPlayer === 'p1') {
+                    startOnlineGameLoop();
+                }
             }
             
             // 更新分数
@@ -1056,19 +1069,11 @@
             // 处理游戏状态
             switch(gameData.state) {
                 case 'waiting':
-                    // 如果是创建房间的玩家，显示房间ID
-                    if (currentRoomId && currentPlayer === 'p1') {
-                        onlineStatus.innerHTML = '<span class="status-waiting">🏠 房间创建成功！</span><br>';
-                        onlineStatus.innerHTML += '<span class="status-online">房间ID: <code style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; color: #4ecca3;">' + currentRoomId + '</code></span><br>';
-                        onlineStatus.innerHTML += '<button onclick="copyRoomId(\'' + currentRoomId + '\')" style="margin-top: 10px; padding: 8px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 15px; cursor: pointer;">📋 复制房间ID</button><br>';
-                        onlineStatus.innerHTML += '<span class="status-waiting">等待其他玩家加入...</span>';
-                    } else {
-                        onlineStatus.innerHTML = '<span class="status-waiting">⏳ 等待其他玩家加入...</span>';
-                    }
+                    onlineStatus.innerHTML = '<span class="status-waiting">⏳ 等待其他玩家加入...</span>';
                     break;
                     
                 case 'ready':
-                    onlineStatus.innerHTML = '<span class="status-online">✅ 双方已就绪！按空格键开始游戏</span>';
+                    onlineStatus.innerHTML = '<span class="status-online">✅ 双方已就绪！等待游戏开始...</span>';
                     break;
                     
                 case 'playing':
@@ -1172,7 +1177,155 @@
                 scores: { p1: 0, p2: 0 }
             });
             
-            onlineGameLoop = setInterval(drawOnlineGame, 50);
+            // 只有创建房间的玩家（p1）运行游戏逻辑
+            if (currentPlayer === 'p1') {
+                onlineGameLoop = setInterval(function() {
+                    realtimeDb.ref('games/' + currentGameId).once('value').then(function(snapshot) {
+                        var gameData = snapshot.val();
+                        if (!gameData || gameData.state !== 'playing') {
+                            clearInterval(onlineGameLoop);
+                            onlineGameLoop = null;
+                            return;
+                        }
+                        
+                        var snake1 = gameData.snake1 || { segments: [], direction: 'right' };
+                        var snake2 = gameData.snake2 || { segments: [], direction: 'left' };
+                        var food = gameData.food || { x: 10, y: 10 };
+                        var scores = gameData.scores || { p1: 0, p2: 0 };
+                        
+                        // 移动玩家1的蛇
+                        var newSnake1 = moveSnake(snake1.segments, snake1.direction);
+                        
+                        // 移动玩家2的蛇
+                        var newSnake2 = moveSnake(snake2.segments, snake2.direction);
+                        
+                        // 检测玩家1是否吃到食物
+                        var p1Ate = checkCollision(newSnake1[0], food);
+                        if (p1Ate) {
+                            food = generateFood(newSnake1.concat(newSnake2));
+                            scores.p1 = (scores.p1 || 0) + 10;
+                        } else {
+                            newSnake1.pop();
+                        }
+                        
+                        // 检测玩家2是否吃到食物
+                        var p2Ate = checkCollision(newSnake2[0], food);
+                        if (p2Ate) {
+                            food = generateFood(newSnake1.concat(newSnake2));
+                            scores.p2 = (scores.p2 || 0) + 10;
+                        } else {
+                            newSnake2.pop();
+                        }
+                        
+                        // 检测碰撞
+                        var gameOver = false;
+                        var winner = null;
+                        
+                        // 检测蛇自身碰撞
+                        if (checkSelfCollision(newSnake1)) {
+                            gameOver = true;
+                            winner = 'p2';
+                        }
+                        if (checkSelfCollision(newSnake2)) {
+                            gameOver = true;
+                            winner = winner ? 'draw' : 'p1';
+                        }
+                        
+                        // 检测蛇之间碰撞
+                        if (checkSnakeCollision(newSnake1, newSnake2)) {
+                            gameOver = true;
+                            winner = 'draw';
+                        }
+                        
+                        // 检测墙壁碰撞（困难模式规则）
+                        if (checkWallCollision(newSnake1[0])) {
+                            gameOver = true;
+                            winner = 'p2';
+                        }
+                        if (checkWallCollision(newSnake2[0])) {
+                            gameOver = true;
+                            winner = winner ? 'draw' : 'p1';
+                        }
+                        
+                        var newState = gameOver ? 'ended' : 'playing';
+                        
+                        realtimeDb.ref('games/' + currentGameId).update({
+                            snake1: { segments: newSnake1, direction: snake1.direction },
+                            snake2: { segments: newSnake2, direction: snake2.direction },
+                            food: food,
+                            scores: scores,
+                            state: newState,
+                            winner: winner
+                        });
+                    });
+                }, 150);
+            }
+            
+            // 所有玩家都运行绘制循环
+            setInterval(drawOnlineGame, 50);
+        }
+        
+        // 移动蛇
+        function moveSnake(segments, direction) {
+            if (!segments || segments.length === 0) return [{x: 0, y: 0}];
+            
+            var newSegments = JSON.parse(JSON.stringify(segments));
+            var head = { x: newSegments[0].x, y: newSegments[0].y };
+            
+            switch(direction) {
+                case 'up': head.y--; break;
+                case 'down': head.y++; break;
+                case 'left': head.x--; break;
+                case 'right': head.x++; break;
+            }
+            
+            newSegments.unshift(head);
+            return newSegments;
+        }
+        
+        // 检测碰撞
+        function checkCollision(segment1, segment2) {
+            return segment1.x === segment2.x && segment1.y === segment2.y;
+        }
+        
+        // 检测自身碰撞
+        function checkSelfCollision(segments) {
+            if (segments.length < 2) return false;
+            var head = segments[0];
+            for (var i = 1; i < segments.length; i++) {
+                if (checkCollision(head, segments[i])) return true;
+            }
+            return false;
+        }
+        
+        // 检测蛇之间碰撞
+        function checkSnakeCollision(snake1, snake2) {
+            var head1 = snake1[0];
+            var head2 = snake2[0];
+            
+            for (var i = 0; i < snake2.length; i++) {
+                if (checkCollision(head1, snake2[i])) return true;
+            }
+            for (var i = 0; i < snake1.length; i++) {
+                if (checkCollision(head2, snake1[i])) return true;
+            }
+            return false;
+        }
+        
+        // 检测墙壁碰撞
+        function checkWallCollision(head) {
+            return head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount;
+        }
+        
+        // 生成食物
+        function generateFood(snakeSegments) {
+            var food;
+            do {
+                food = { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) };
+            } while (snakeSegments.some(function(segment) {
+                return checkCollision(segment, food);
+            }));
+            return food;
         }
         
         // 页面加载时初始化联机游戏画面
