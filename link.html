@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>贪吃蛇 - 联机对战</title>
+    <!-- 使用 Firebase 8.x CDN -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .back-btn {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .title {
+            font-size: 2.5em;
+            color: #4ecca3;
+            text-shadow: 0 0 10px rgba(78, 204, 163, 0.5);
+        }
+
+        .online-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .online-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            width: 400px;
+        }
+
+        .online-title {
+            color: #9b59b6;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .input-name {
+            padding: 10px 15px;
+            border: 2px solid #3498db;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1em;
+            margin-bottom: 15px;
+            width: 100%;
+        }
+
+        .input-name::placeholder {
+            color: #888;
+        }
+
+        .online-btn {
+            padding: 12px 30px;
+            font-size: 1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+            margin: 5px;
+        }
+
+        .btn-create {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+        }
+
+        .btn-create:hover {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+        }
+
+        .btn-join {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+        }
+
+        .btn-join:hover {
+            background: linear-gradient(135deg, #2980b9, #2471a3);
+        }
+
+        .btn-leave {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+
+        .btn-leave:hover {
+            background: linear-gradient(135deg, #c0392b, #a93226);
+        }
+
+        .room-input {
+            padding: 10px 15px;
+            border: 2px solid #e74c3c;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1em;
+            margin-bottom: 15px;
+            width: 100%;
+        }
+
+        .room-input::placeholder {
+            color: #888;
+        }
+
+        .room-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+
+        .room-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .room-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .room-id {
+            font-weight: bold;
+            color: #4ecca3;
+        }
+
+        .room-player {
+            color: #888;
+            font-size: 0.9em;
+        }
+
+        .online-status {
+            margin: 10px 0;
+            font-size: 1.1em;
+        }
+
+        .status-online {
+            color: #2ecc71;
+        }
+
+        .status-waiting {
+            color: #f39c12;
+        }
+
+        .player-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 15px 0;
+        }
+
+        .player-tag {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .player-tag.p1 {
+            background: rgba(52, 152, 219, 0.3);
+            color: #3498db;
+        }
+
+        .player-tag.p2 {
+            background: rgba(231, 76, 60, 0.3);
+            color: #e74c3c;
+        }
+
+        .player-tag.ready {
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+        }
+
+        .canvas-wrapper {
+            border: 3px solid #4ecca3;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(78, 204, 163, 0.3);
+        }
+
+        canvas {
+            background: #0a0a0a;
+            display: block;
+        }
+
+        .score-board {
+            font-size: 1.5em;
+            color: #4ecca3;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+
+        #onlineScoreBoard {
+            color: #fff;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        #roomIdDisplay {
+            margin-bottom: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="location.href='index.html'">← 返回首页</button>
+        <h1 class="title">🐍 贪吃蛇</h1>
+    </div>
+
+    <div class="online-container">
+        <div class="online-panel">
+            <div class="online-title">🎮 联机对战</div>
+            
+            <input type="text" class="input-name" id="playerNameInput" placeholder="输入你的昵称">
+            
+            <button class="online-btn btn-create" id="createRoomBtn">创建房间</button>
+            <button class="online-btn btn-join" id="joinRoomBtn">加入房间</button>
+            
+            <input type="text" class="room-input" id="roomIdInput" placeholder="房间ID" style="display: none;">
+            <button class="online-btn btn-join" id="refreshRoomsBtn" style="display: none;">刷新房间列表</button>
+            
+            <div id="roomList" class="room-list" style="display: none;"></div>
+            <div id="roomIdDisplay" style="display: none; margin-bottom: 10px; text-align: center;"></div>
+            <div id="onlineStatus" class="online-status"></div>
+            <div id="playerIndicator" class="player-indicator" style="display: none;"></div>
+            <button class="online-btn btn-leave" id="leaveRoomBtn" style="display: none;">离开房间</button>
+        </div>
+
+        <div id="onlineScoreBoard" style="display: none; color: #fff; font-size: 1.2em; margin-bottom: 10px;">
+            <span style="color: #3498db;">玩家1:</span> <span id="p1Score">0</span> 
+            <span style="margin: 0 20px;">VS</span> 
+            <span style="color: #e74c3c;">玩家2:</span> <span id="p2Score">0</span>
+        </div>
+
+        <div class="canvas-wrapper">
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+        </div>
+    </div>
+
+    <script src="firebase-config.js"></script>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+
+        // DOM 元素
+        const playerNameInput = document.getElementById('playerNameInput');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const joinRoomBtn = document.getElementById('joinRoomBtn');
+        const roomIdInput = document.getElementById('roomIdInput');
+        const refreshRoomsBtn = document.getElementById('refreshRoomsBtn');
+        const roomList = document.getElementById('roomList');
+        const onlineStatus = document.getElementById('onlineStatus');
+        const playerIndicator = document.getElementById('playerIndicator');
+        const leaveRoomBtn = document.getElementById('leaveRoomBtn');
+        const onlineScoreBoard = document.getElementById('onlineScoreBoard');
+        const p1ScoreElement = document.getElementById('p1Score');
+        const p2ScoreElement = document.getElementById('p2Score');
+        const roomIdDisplay = document.getElementById('roomIdDisplay');
+
+        // 双人对战相关变量
+        var onlineSnake1 = [];
+        var onlineSnake2 = [];
+        var onlineFood = { x: 10, y: 10 };
+        var onlineGameLoop = null;
+        var currentRoomId = null;
+        var drawLoopId = null;
+        var isDrawing = false;
+
+        // 创建房间
+        createRoomBtn.addEventListener('click', function() {
+            var playerName = playerNameInput.value || '匿名玩家';
+            
+            createRoom(playerName).then(function(result) {
+                currentRoomId = result.gameId;
+                
+                roomIdDisplay.innerHTML = '<span class="status-online">房间ID: <code style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; color: #4ecca3; font-size: 1.2em;">' + result.gameId + '</code></span><br>';
+                roomIdDisplay.innerHTML += '<button onclick="copyRoomId(\'' + result.gameId + '\')" style="margin-top: 10px; padding: 8px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 15px; cursor: pointer;">📋 复制房间ID</button>';
+                roomIdDisplay.style.display = 'block';
+                
+                onlineStatus.innerHTML = '<span class="status-waiting">⏳ 等待其他玩家加入...</span>';
+                
+                createRoomBtn.style.display = 'none';
+                joinRoomBtn.style.display = 'none';
+                roomIdInput.style.display = 'none';
+                refreshRoomsBtn.style.display = 'none';
+                roomList.style.display = 'none';
+                leaveRoomBtn.style.display = 'inline-block';
+                
+                startDrawLoop();
+                listenToGame(result.gameId, handleOnlineGameUpdate);
+            }).catch(function(error) {
+                onlineStatus.innerHTML = '<span style="color: #e74c3c;">创建房间失败: ' + error + '</span>';
+            });
+        });
+
+        // 加入房间
+        joinRoomBtn.addEventListener('click', function() {
+            if (roomIdInput.style.display === 'none') {
+                roomIdInput.style.display = 'block';
+                refreshRoomsBtn.style.display = 'inline-block';
+                roomList.style.display = 'block';
+                refreshRoomList();
+            } else {
+                var roomId = roomIdInput.value.trim();
+                var playerName = playerNameInput.value || '匿名玩家';
+                
+                if (!roomId) {
+                    onlineStatus.innerHTML = '<span style="color: #e74c3c;">请输入房间ID</span>';
+                    return;
+                }
+                
+                joinRoom(roomId, playerName).then(function(result) {
+                    onlineStatus.innerHTML = '<span class="status-online">✅ 成功加入房间！</span>';
+                    
+                    createRoomBtn.style.display = 'none';
+                    joinRoomBtn.style.display = 'none';
+                    roomIdInput.style.display = 'none';
+                    refreshRoomsBtn.style.display = 'none';
+                    roomList.style.display = 'none';
+                    leaveRoomBtn.style.display = 'inline-block';
+                    
+                    startDrawLoop();
+                    listenToGame(result.gameId, handleOnlineGameUpdate);
+                }).catch(function(error) {
+                    onlineStatus.innerHTML = '<span style="color: #e74c3c;">加入失败: ' + error + '</span>';
+                });
+            }
+        });
+
+        // 刷新房间列表
+        refreshRoomsBtn.addEventListener('click', refreshRoomList);
+
+        function refreshRoomList() {
+            getRooms(function(rooms) {
+                if (rooms.length === 0) {
+                    roomList.innerHTML = '<p style="color: #888; text-align: center;">暂无可用房间</p>';
+                    return;
+                }
+                
+                roomList.innerHTML = rooms.map(function(room) {
+                    return '<div class="room-item" onclick="joinRoomDirect(\'' + room.id + '\')">' +
+                        '<div class="room-id">房间ID: ' + room.id + '</div>' +
+                        '<div class="room-player">创建者: ' + (room.players.p1 ? room.players.p1.name : '未知') + '</div>' +
+                        '</div>';
+                }).join('');
+            });
+        }
+
+        window.joinRoomDirect = function(roomId) {
+            roomIdInput.value = roomId;
+            var playerName = playerNameInput.value || '匿名玩家';
+            
+            joinRoom(roomId, playerName).then(function(result) {
+                onlineStatus.innerHTML = '<span class="status-online">✅ 成功加入房间！</span>';
+                
+                createRoomBtn.style.display = 'none';
+                joinRoomBtn.style.display = 'none';
+                roomIdInput.style.display = 'none';
+                refreshRoomsBtn.style.display = 'none';
+                roomList.style.display = 'none';
+                leaveRoomBtn.style.display = 'inline-block';
+                
+                startDrawLoop();
+                listenToGame(result.gameId, handleOnlineGameUpdate);
+            }).catch(function(error) {
+                onlineStatus.innerHTML = '<span style="color: #e74c3c;">加入失败: ' + error + '</span>';
+            });
+        };
+
+        window.copyRoomId = function(roomId) {
+            navigator.clipboard.writeText(roomId).then(function() {
+                alert('房间ID已复制到剪贴板！');
+            }).catch(function(err) {
+                var tempInput = document.createElement('input');
+                tempInput.value = roomId;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                alert('房间ID已复制到剪贴板！');
+            });
+        };
+
+        // 离开房间
+        leaveRoomBtn.addEventListener('click', function() {
+            leaveRoom();
+            
+            onlineStatus.innerHTML = '';
+            roomIdDisplay.innerHTML = '';
+            roomIdDisplay.style.display = 'none';
+            playerIndicator.innerHTML = '';
+            playerIndicator.style.display = 'none';
+            onlineScoreBoard.style.display = 'none';
+            
+            createRoomBtn.style.display = 'inline-block';
+            joinRoomBtn.style.display = 'inline-block';
+            leaveRoomBtn.style.display = 'none';
+            
+            if (onlineGameLoop) {
+                clearInterval(onlineGameLoop);
+                onlineGameLoop = null;
+            }
+            
+            if (drawLoopId) {
+                clearInterval(drawLoopId);
+                drawLoopId = null;
+            }
+            
+            currentRoomId = null;
+        });
+
+        // 处理联机游戏状态更新
+        function handleOnlineGameUpdate(gameData) {
+            if (gameData.players) {
+                var p1Ready = gameData.players.p1 && gameData.players.p1.ready;
+                var p2Ready = gameData.players.p2 && gameData.players.p2.ready;
+                
+                playerIndicator.innerHTML = '';
+                
+                if (gameData.players.p1) {
+                    playerIndicator.innerHTML += '<div class="player-tag p1 ' + (p1Ready ? 'ready' : 'not-ready') + '">';
+                    playerIndicator.innerHTML += gameData.players.p1.name;
+                    playerIndicator.innerHTML += p1Ready ? ' ✅' : ' ⏳';
+                    playerIndicator.innerHTML += '</div>';
+                }
+                
+                if (gameData.players.p2) {
+                    playerIndicator.innerHTML += '<div class="player-tag p2 ' + (p2Ready ? 'ready' : 'not-ready') + '">';
+                    playerIndicator.innerHTML += gameData.players.p2.name;
+                    playerIndicator.innerHTML += p2Ready ? ' ✅' : ' ⏳';
+                    playerIndicator.innerHTML += '</div>';
+                }
+                
+                playerIndicator.style.display = 'flex';
+                
+                if (p1Ready && p2Ready && gameData.state === 'ready' && currentPlayer === 'p1') {
+                    startOnlineGameLoop();
+                }
+            }
+            
+            if (gameData.scores) {
+                p1ScoreElement.textContent = gameData.scores.p1 || 0;
+                p2ScoreElement.textContent = gameData.scores.p2 || 0;
+                onlineScoreBoard.style.display = 'block';
+            }
+            
+            switch(gameData.state) {
+                case 'waiting':
+                    onlineStatus.innerHTML = '<span class="status-waiting">⏳ 等待其他玩家加入...</span>';
+                    break;
+                case 'ready':
+                    onlineStatus.innerHTML = '<span class="status-online">✅ 双方已就绪！等待游戏开始...</span>';
+                    break;
+                case 'playing':
+                    onlineStatus.innerHTML = '<span class="status-online">🎮 游戏进行中</span>';
+                    break;
+                case 'ended':
+                    var winnerText = '';
+                    var p1Name = gameData.players && gameData.players.p1 ? gameData.players.p1.name : '玩家1';
+                    var p2Name = gameData.players && gameData.players.p2 ? gameData.players.p2.name : '玩家2';
+                    var p1Score = gameData.scores && gameData.scores.p1 ? gameData.scores.p1 : 0;
+                    var p2Score = gameData.scores && gameData.scores.p2 ? gameData.scores.p2 : 0;
+                    
+                    if (gameData.winner === 'p1') {
+                        winnerText = '<span style="color: #3498db; font-size: 1.2em; font-weight: bold;">🎉 ' + p1Name + ' 获胜！</span>';
+                    } else if (gameData.winner === 'p2') {
+                        winnerText = '<span style="color: #e74c3c; font-size: 1.2em; font-weight: bold;">🎉 ' + p2Name + ' 获胜！</span>';
+                    } else if (gameData.winner === 'draw') {
+                        winnerText = '<span style="color: #f39c12; font-size: 1.2em; font-weight: bold;">🤝 平局！</span>';
+                    } else {
+                        if (p1Score > p2Score) {
+                            winnerText = '<span style="color: #3498db; font-size: 1.2em; font-weight: bold;">🎉 ' + p1Name + ' 获胜！</span>';
+                        } else if (p2Score > p1Score) {
+                            winnerText = '<span style="color: #e74c3c; font-size: 1.2em; font-weight: bold;">🎉 ' + p2Name + ' 获胜！</span>';
+                        } else {
+                            winnerText = '<span style="color: #f39c12; font-size: 1.2em; font-weight: bold;">🤝 平局！</span>';
+                        }
+                    }
+                    
+                    onlineStatus.innerHTML = winnerText + '<br>';
+                    onlineStatus.innerHTML += '<span style="font-size: 1.1em;">' + p1Name + ': ' + p1Score + ' 分</span><br>';
+                    onlineStatus.innerHTML += '<span style="font-size: 1.1em;">' + p2Name + ': ' + p2Score + ' 分</span><br>';
+                    onlineStatus.innerHTML += '<button onclick="leaveRoom()" style="margin-top: 10px; padding: 8px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 15px; cursor: pointer;">🔄 返回房间列表</button>';
+                    break;
+            }
+            
+            if (gameData.snake1 && gameData.snake1.segments) {
+                onlineSnake1 = gameData.snake1.segments;
+            }
+            if (gameData.snake2 && gameData.snake2.segments) {
+                onlineSnake2 = gameData.snake2.segments;
+            }
+            if (gameData.food) {
+                onlineFood = gameData.food;
+            }
+        }
+
+        // 联机对战键盘事件
+        document.addEventListener('keydown', function(e) {
+            if (!isOnlineMode || !currentGameId) return;
+            
+            if (e.key === ' ') {
+                e.preventDefault();
+                setReady(true);
+                return;
+            }
+            
+            var direction = null;
+            switch(e.key) {
+                case 'ArrowUp': direction = 'up'; break;
+                case 'ArrowDown': direction = 'down'; break;
+                case 'ArrowLeft': direction = 'left'; break;
+                case 'ArrowRight': direction = 'right'; break;
+            }
+            
+            if (direction) {
+                sendPlayerMove(direction);
+            }
+        });
+
+        // 绘制联机对战画面
+        function drawOnlineGame() {
+            if (isDrawing) return;
+            isDrawing = true;
+            
+            requestAnimationFrame(function() {
+                ctx.fillStyle = '#0a0a0a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                onlineSnake1.forEach(function(segment, index) {
+                    ctx.fillStyle = index === 0 ? '#5dade2' : '#3498db';
+                    ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+                });
+                
+                onlineSnake2.forEach(function(segment, index) {
+                    ctx.fillStyle = index === 0 ? '#ec7063' : '#e74c3c';
+                    ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+                });
+                
+                ctx.fillStyle = '#ff6b6b';
+                ctx.beginPath();
+                ctx.arc(onlineFood.x * gridSize + gridSize / 2, onlineFood.y * gridSize + gridSize / 2, gridSize / 2 - 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                isDrawing = false;
+            });
+        }
+
+        function startDrawLoop() {
+            if (drawLoopId) return;
+            drawLoopId = setInterval(drawOnlineGame, 33);
+        }
+
+        function initOnlineGame() {
+            onlineSnake1 = [{x: 5, y: 10}];
+            onlineSnake2 = [{x: 14, y: 10}];
+            onlineFood = { x: 10, y: 10 };
+            drawOnlineGame();
+        }
+
+        function startOnlineGameLoop() {
+            if (onlineGameLoop) return;
+            
+            realtimeDb.ref('games/' + currentGameId).update({
+                snake1: { segments: [{x: 5, y: 10}], direction: 'right' },
+                snake2: { segments: [{x: 14, y: 10}], direction: 'left' },
+                food: { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) },
+                state: 'playing',
+                scores: { p1: 0, p2: 0 }
+            });
+            
+            if (currentPlayer === 'p1') {
+                onlineGameLoop = setInterval(function() {
+                    realtimeDb.ref('games/' + currentGameId).once('value').then(function(snapshot) {
+                        var gameData = snapshot.val();
+                        if (!gameData || gameData.state !== 'playing') {
+                            clearInterval(onlineGameLoop);
+                            onlineGameLoop = null;
+                            return;
+                        }
+                        
+                        var snake1 = gameData.snake1 || { segments: [], direction: 'right' };
+                        var snake2 = gameData.snake2 || { segments: [], direction: 'left' };
+                        var food = gameData.food || { x: 10, y: 10 };
+                        var scores = gameData.scores || { p1: 0, p2: 0 };
+                        
+                        var newSnake1 = moveSnake(snake1.segments, snake1.direction);
+                        var newSnake2 = moveSnake(snake2.segments, snake2.direction);
+                        
+                        var p1Ate = checkCollision(newSnake1[0], food);
+                        if (p1Ate) {
+                            food = generateFood(newSnake1.concat(newSnake2));
+                            scores.p1 = (scores.p1 || 0) + 10;
+                        } else {
+                            newSnake1.pop();
+                        }
+                        
+                        var p2Ate = checkCollision(newSnake2[0], food);
+                        if (p2Ate) {
+                            food = generateFood(newSnake1.concat(newSnake2));
+                            scores.p2 = (scores.p2 || 0) + 10;
+                        } else {
+                            newSnake2.pop();
+                        }
+                        
+                        var gameOver = false;
+                        var winner = null;
+                        
+                        if (checkSelfCollision(newSnake1)) {
+                            gameOver = true;
+                            winner = 'p2';
+                        }
+                        if (checkSelfCollision(newSnake2)) {
+                            gameOver = true;
+                            winner = winner ? 'draw' : 'p1';
+                        }
+                        
+                        if (checkSnakeCollision(newSnake1, newSnake2)) {
+                            gameOver = true;
+                            winner = 'draw';
+                        }
+                        
+                        if (checkWallCollision(newSnake1[0])) {
+                            gameOver = true;
+                            winner = 'p2';
+                        }
+                        if (checkWallCollision(newSnake2[0])) {
+                            gameOver = true;
+                            winner = winner ? 'draw' : 'p1';
+                        }
+                        
+                        var newState = gameOver ? 'ended' : 'playing';
+                        
+                        realtimeDb.ref('games/' + currentGameId).update({
+                            snake1: { segments: newSnake1, direction: snake1.direction },
+                            snake2: { segments: newSnake2, direction: snake2.direction },
+                            food: food,
+                            scores: scores,
+                            state: newState,
+                            winner: winner
+                        });
+                    });
+                }, 150);
+            }
+            
+            setInterval(drawOnlineGame, 50);
+        }
+
+        function moveSnake(segments, direction) {
+            if (!segments || segments.length === 0) return [{x: 0, y: 0}];
+            
+            var newSegments = JSON.parse(JSON.stringify(segments));
+            var head = { x: newSegments[0].x, y: newSegments[0].y };
+            
+            switch(direction) {
+                case 'up': head.y--; break;
+                case 'down': head.y++; break;
+                case 'left': head.x--; break;
+                case 'right': head.x++; break;
+            }
+            
+            newSegments.unshift(head);
+            return newSegments;
+        }
+
+        function checkCollision(segment1, segment2) {
+            return segment1.x === segment2.x && segment1.y === segment2.y;
+        }
+
+        function checkSelfCollision(segments) {
+            if (segments.length < 2) return false;
+            var head = segments[0];
+            for (var i = 1; i < segments.length; i++) {
+                if (checkCollision(head, segments[i])) return true;
+            }
+            return false;
+        }
+
+        function checkSnakeCollision(snake1, snake2) {
+            var head1 = snake1[0];
+            var head2 = snake2[0];
+            
+            for (var i = 0; i < snake2.length; i++) {
+                if (checkCollision(head1, snake2[i])) return true;
+            }
+            for (var i = 0; i < snake1.length; i++) {
+                if (checkCollision(head2, snake1[i])) return true;
+            }
+            return false;
+        }
+
+        function checkWallCollision(head) {
+            return head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount;
+        }
+
+        function generateFood(snakeSegments) {
+            var food;
+            do {
+                food = { x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount) };
+            } while (snakeSegments.some(function(segment) {
+                return checkCollision(segment, food);
+            }));
+            return food;
+        }
+
+        initOnlineGame();
+    </script>
+</body>
+</html>
