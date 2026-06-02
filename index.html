@@ -78,6 +78,12 @@
             font-family: 'Arial', sans-serif;
         }
         
+        .main-container {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+        
         .game-container {
             text-align: center;
         }
@@ -255,38 +261,39 @@
     </style>
 </head>
 <body>
-    <div class="game-container">
-        <h1>🐍 贪吃蛇</h1>
-        <div class="mode-selector">
-            <button class="mode-btn active" id="easyMode">简单模式</button>
-            <button class="mode-btn" id="hardMode">困难模式</button>
+    <div class="main-container">
+        <!-- 左侧排行榜 - 简单模式 -->
+        <div class="leaderboard-panel left-panel">
+            <h4 style="color: #3498db; margin-bottom: 10px; text-align: center;">🌊 简单模式排行榜</h4>
+            <div id="easyLeaderboard"></div>
         </div>
-        <div class="current-mode" id="currentMode">当前模式：简单模式</div>
-        <div class="score-board">得分: <span class="score" id="score">0</span></div>
-        <canvas id="gameCanvas" width="400" height="400"></canvas>
-        <div class="game-over" id="gameOver">游戏结束！</div>
-        <div class="game-paused" id="gamePaused">⏸️ 游戏暂停</div>
-        <button class="btn" id="startBtn">开始游戏</button>
-        <div class="game-controls">
-            <button class="control-btn" id="pauseBtn">⏸️ 暂停</button>
-            <button class="control-btn exit" id="exitBtn">❌ 退出</button>
-            <button class="control-btn" id="leaderboardBtn">🏆 排行榜</button>
-        </div>
-        <div id="leaderboard" style="display: none; margin-top: 20px; color: #fff;">
-            <h3 style="color: #4ecca3; margin-bottom: 15px;">🏆 排行榜</h3>
-            <div style="display: flex; gap: 30px; justify-content: center;">
-                <div class="leaderboard-panel">
-                    <h4 style="color: #3498db; margin-bottom: 10px; text-align: center;">🌊 简单模式</h4>
-                    <div id="easyLeaderboard"></div>
-                </div>
-                <div class="leaderboard-panel">
-                    <h4 style="color: #e74c3c; margin-bottom: 10px; text-align: center;">🔥 困难模式</h4>
-                    <div id="hardLeaderboard"></div>
-                </div>
+        
+        <!-- 游戏主区域 -->
+        <div class="game-container">
+            <h1>🐍 贪吃蛇</h1>
+            <div class="mode-selector">
+                <button class="mode-btn active" id="easyMode">简单模式</button>
+                <button class="mode-btn" id="hardMode">困难模式</button>
+            </div>
+            <div class="current-mode" id="currentMode">当前模式：简单模式</div>
+            <div class="score-board">得分: <span class="score" id="score">0</span></div>
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+            <div class="game-over" id="gameOver">游戏结束！</div>
+            <div class="game-paused" id="gamePaused">⏸️ 游戏暂停</div>
+            <button class="btn" id="startBtn">开始游戏</button>
+            <div class="game-controls">
+                <button class="control-btn" id="pauseBtn">⏸️ 暂停</button>
+                <button class="control-btn exit" id="exitBtn">❌ 退出</button>
+            </div>
+            <div class="controls">
+                <p>使用方向键 ↑ ↓ ← → 控制蛇的移动</p>
             </div>
         </div>
-        <div class="controls">
-            <p>使用方向键 ↑ ↓ ← → 控制蛇的移动</p>
+        
+        <!-- 右侧排行榜 - 困难模式 -->
+        <div class="leaderboard-panel right-panel">
+            <h4 style="color: #e74c3c; margin-bottom: 10px; text-align: center;">🔥 困难模式排行榜</h4>
+            <div id="hardLeaderboard"></div>
         </div>
     </div>
 
@@ -302,8 +309,6 @@
         const easyModeBtn = document.getElementById('easyMode');
         const hardModeBtn = document.getElementById('hardMode');
         const currentModeElement = document.getElementById('currentMode');
-        const leaderboardBtn = document.getElementById('leaderboardBtn');
-        const leaderboardElement = document.getElementById('leaderboard');
         const easyLeaderboardElement = document.getElementById('easyLeaderboard');
         const hardLeaderboardElement = document.getElementById('hardLeaderboard');
 
@@ -402,6 +407,9 @@
             
             var playerName = prompt('游戏结束！请输入你的昵称：') || '匿名玩家';
             saveScore(playerName, score, gameMode);
+            
+            // 延迟刷新排行榜（确保数据已保存）
+            setTimeout(refreshLeaderboards, 500);
         }
 
         function gameStep() {
@@ -521,18 +529,13 @@
             });
         }
 
-        leaderboardBtn.addEventListener('click', () => {
-            if (isGameRunning) return;
-            
-            if (leaderboardElement.style.display === 'none') {
-                leaderboardElement.style.display = 'block';
-                leaderboardBtn.textContent = '🔽 收起排行榜';
-                loadLeaderboards();
-            } else {
-                leaderboardElement.style.display = 'none';
-                leaderboardBtn.textContent = '🏆 排行榜';
-            }
-        });
+        // 页面加载时自动加载排行榜
+        loadLeaderboards();
+        
+        // 游戏结束后刷新排行榜
+        function refreshLeaderboards() {
+            loadLeaderboards();
+        }
 
         drawGame();
     </script>
