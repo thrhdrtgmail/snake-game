@@ -708,17 +708,24 @@
                     var snake2 = gameData.snake2 || { segments: [{x: 14, y: 10}], direction: 'left' };
                     var currentFood = gameData.food || { x: 10, y: 10 };
                     
-                    // 玩家1负责所有游戏逻辑计算
+                    console.log('游戏循环 - 读取到的方向:', snake1.direction, snake2.direction);
+                    
+                    // 玩家 1 负责所有游戏逻辑计算
                     if (currentPlayer === 'p1') {
                         // 获取双方方向（从数据库读取，这是关键！）
                         var dir1 = snake1.direction || 'right';
                         var dir2 = snake2.direction || 'left';
                         
-                        console.log('玩家1循环 - 方向:', dir1, dir2);
+                        console.log('玩家 1 循环 - 使用方向:', dir1, dir2);
+                        console.log('玩家 1 循环 - 蛇 1 segments:', snake1.segments);
+                        console.log('玩家 1 循环 - 蛇 2 segments:', snake2.segments);
                         
                         // 移动蛇（创建新数组）
                         var newSnake1 = moveSnake(snake1.segments, dir1);
                         var newSnake2 = moveSnake(snake2.segments, dir2);
+                        
+                        console.log('玩家 1 循环 - 移动后蛇 1:', newSnake1);
+                        console.log('玩家 1 循环 - 移动后蛇 2:', newSnake2);
                         
                         // 检查食物碰撞（只有蛇头碰到才算吃到）
                         var head1 = newSnake1[0];
