@@ -30,15 +30,114 @@ var isOnlineMode = false;
 
 // 保存分数到云端
 window.saveScore = function(playerName, score, gameMode) {
+    console.log('saveScore 被调用:', playerName, score, gameMode);
+    
+    if (!db) {
+        console.error('Firestore 未初始化');
+        alert('数据库连接失败，无法保存分数');
+        return;
+    }
+    
     db.collection("scores").add({
         playerName: playerName || "匿名玩家",
         score: score,
         gameMode: gameMode,
         createdAt: new Date()
     }).then(function(docRef) {
-        console.log("分数保存成功！");
+        console.log("分数保存成功！文档ID:", docRef.id);
+        // 弹窗A：提示数据已录入数据库与排行榜
+        showSaveSuccessPopup(playerName, score, gameMode);
     }).catch(function(error) {
         console.error("保存失败:", error);
+        alert('保存失败: ' + error.message);
+    });
+}
+
+// 显示保存成功弹窗
+function showSaveSuccessPopup(playerName, score, gameMode) {
+    // 创建弹窗容器
+    var popup = document.createElement('div');
+    popup.id = 'saveSuccessPopup';
+    popup.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        border: 2px solid #4ade80;
+        border-radius: 16px;
+        padding: 30px 40px;
+        box-shadow: 0 10px 40px rgba(74, 222, 128, 0.3);
+        z-index: 1000;
+        text-align: center;
+        min-width: 300px;
+        animation: popupIn 0.3s ease-out;
+    `;
+    
+    // 创建弹窗内容
+    popup.innerHTML = `
+        <div style="font-size: 48px; margin-bottom: 15px;">🎉</div>
+        <h2 style="color: #4ade80; font-size: 24px; margin-bottom: 10px; font-weight: bold;">数据已录入！</h2>
+        <p style="color: #e2e8f0; font-size: 16px; margin-bottom: 8px;">玩家：${playerName || '匿名玩家'}</p>
+        <p style="color: #e2e8f0; font-size: 16px; margin-bottom: 8px;">分数：${score} 分</p>
+        <p style="color: #e2e8f0; font-size: 16px; margin-bottom: 20px;">模式：${gameMode === 'easy' ? '简单模式' : '困难模式'}</p>
+        <button id="popupCloseBtn" style="
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            border: none;
+            color: #1a1a2e;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        ">
+            确定
+        </button>
+    `;
+    
+    // 创建遮罩层
+    var overlay = document.createElement('div');
+    overlay.id = 'popupOverlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 999;
+        animation: fadeIn 0.3s ease-out;
+    `;
+    
+    // 添加动画样式
+    var style = document.createElement('style');
+    style.textContent = `
+        @keyframes popupIn {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // 添加到页面
+    document.body.appendChild(overlay);
+    document.body.appendChild(popup);
+    
+    // 关闭按钮事件
+    document.getElementById('popupCloseBtn').addEventListener('click', function() {
+        document.body.removeChild(popup);
+        document.body.removeChild(overlay);
+    });
+    
+    // 点击遮罩层关闭
+    overlay.addEventListener('click', function() {
+        document.body.removeChild(popup);
+        document.body.removeChild(overlay);
     });
 }
 
