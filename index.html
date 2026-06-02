@@ -935,6 +935,9 @@
                     roomList.style.display = 'none';
                     leaveRoomBtn.style.display = 'inline-block';
                     
+                    // 玩家2启动绘制循环
+                    setInterval(drawOnlineGame, 50);
+                    
                     // 监听房间状态
                     listenToGame(result.gameId, handleOnlineGameUpdate);
                 }).catch(function(error) {
@@ -976,6 +979,9 @@
                 refreshRoomsBtn.style.display = 'none';
                 roomList.style.display = 'none';
                 leaveRoomBtn.style.display = 'inline-block';
+                
+                // 玩家2启动绘制循环
+                setInterval(drawOnlineGame, 50);
                 
                 listenToGame(result.gameId, handleOnlineGameUpdate);
             }).catch(function(error) {
