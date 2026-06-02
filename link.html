@@ -321,9 +321,13 @@
             createRoom(playerName).then(function(result) {
                 currentRoomId = result.gameId;
                 currentGameId = result.gameId;
+                window.currentGameId = result.gameId;  // 设置全局变量
+                window.currentPlayer = 'p1';  // 设置全局变量
                 
-                roomIdDisplay.innerHTML = '<span class="status-online">房间ID: <code style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; color: #4ecca3; font-size: 1.2em;">' + result.gameId + '</code></span><br>';
-                roomIdDisplay.innerHTML += '<button onclick="copyRoomId(\'' + result.gameId + '\')" style="margin-top: 10px; padding: 8px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 15px; cursor: pointer;">📋 复制房间ID</button>';
+                console.log('玩家 1 创建房间成功 - roomId:', result.gameId);
+                
+                roomIdDisplay.innerHTML = '<span class="status-online">房间 ID: <code style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; color: #4ecca3; font-size: 1.2em;">' + result.gameId + '</code></span><br>';
+                roomIdDisplay.innerHTML += '<button onclick="copyRoomId(\'' + result.gameId + '\')" style="margin-top: 10px; padding: 8px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 15px; cursor: pointer;">📋 复制房间 ID</button>';
                 roomIdDisplay.style.display = 'block';
                 
                 onlineStatus.innerHTML = '<span class="status-waiting">⏳ 等待其他玩家加入...</span>';
