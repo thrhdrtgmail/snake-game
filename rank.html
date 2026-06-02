@@ -213,6 +213,7 @@
     </div>
 
     <button class="refresh-btn" onclick="loadLeaderboards()">🔄 刷新排行榜</button>
+    <button class="refresh-btn" onclick="testFirestore()" style="background: #3498db; margin-left: 10px;">🔍 测试连接</button>
 
     <script src="firebase-config.js"></script>
     <script>
@@ -220,6 +221,51 @@
             console.log('开始加载排行榜...');
             loadLeaderboard('easy', 'easyLeaderboard');
             loadLeaderboard('hard', 'hardLeaderboard');
+        }
+
+        function testFirestore() {
+            console.log('=== 测试 Firestore 连接 ===');
+            
+            // 检查 Firebase 是否加载
+            if (typeof firebase === 'undefined') {
+                console.error('❌ Firebase SDK 未加载');
+                alert('Firebase SDK 未加载');
+                return;
+            }
+            console.log('✅ Firebase SDK 已加载');
+            
+            // 检查 Firestore 是否初始化
+            if (typeof db === 'undefined' || !db) {
+                console.error('❌ Firestore 未初始化');
+                alert('Firestore 未初始化');
+                return;
+            }
+            console.log('✅ Firestore 已初始化');
+            
+            // 测试添加文档
+            console.log('测试添加文档...');
+            db.collection("scores").add({
+                playerName: "测试用户",
+                score: 100,
+                gameMode: "easy",
+                createdAt: new Date(),
+                testData: true
+            }).then(function(docRef) {
+                console.log('✅ 添加文档成功, ID:', docRef.id);
+                
+                // 测试查询
+                console.log('测试查询文档...');
+                db.collection("scores").get().then(function(querySnapshot) {
+                    console.log('✅ 查询成功, 文档数量:', querySnapshot.size);
+                    alert('Firestore 连接正常！当前有 ' + querySnapshot.size + ' 条记录');
+                }).catch(function(error) {
+                    console.error('❌ 查询失败:', error);
+                    alert('查询失败: ' + error.message);
+                });
+            }).catch(function(error) {
+                console.error('❌ 添加文档失败:', error);
+                alert('添加文档失败: ' + error.message + '\n错误代码: ' + error.code);
+            });
         }
 
         function loadLeaderboard(mode, containerId) {

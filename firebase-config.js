@@ -15,6 +15,14 @@ firebase.initializeApp(firebaseConfig);
 var db = firebase.firestore();
 var realtimeDb = firebase.database();
 
+// 初始化完成标志
+var firebaseInitialized = false;
+
+// 监听 Firestore 初始化完成
+db.settings({ timestampsInSnapshots: true });
+console.log('Firebase 初始化完成');
+firebaseInitialized = true;
+
 // 全局变量
 var currentGameId = null;
 var currentPlayer = null;
@@ -37,11 +45,28 @@ window.saveScore = function(playerName, score, gameMode) {
 // 获取排行榜（支持模式筛选）
 window.getLeaderboard = function(gameMode, callback) {
     console.log('getLeaderboard 被调用, 模式:', gameMode);
-    if (!db) {
-        console.error('Firebase Firestore 未初始化');
+    
+    // 检查 Firebase 是否初始化
+    if (typeof firebase === 'undefined') {
+        console.error('Firebase SDK 未加载');
         callback([]);
         return;
     }
+    
+    if (!db) {
+        console.error('Firebase Firestore 未初始化');
+        // 尝试重新初始化
+        try {
+            db = firebase.firestore();
+            console.log('Firestore 重新初始化成功');
+        } catch (e) {
+            console.error('Firestore 重新初始化失败:', e);
+            callback([]);
+            return;
+        }
+    }
+    
+    console.log('开始查询 Firestore...');
     
     db.collection("scores").orderBy("score", "desc").limit(20).get()
         .then(function(querySnapshot) {
@@ -50,12 +75,14 @@ window.getLeaderboard = function(gameMode, callback) {
             querySnapshot.forEach(function(doc) {
                 var data = doc.data();
                 console.log('文档数据:', data);
-                if (!gameMode || gameMode === 'all' || data.gameMode === gameMode) {
+                // 兼容大小写问题
+                var docMode = data.gameMode || data.gamemode || data.mode;
+                if (!gameMode || gameMode === 'all' || docMode === gameMode || docMode === gameMode.toLowerCase() || docMode === gameMode.toUpperCase()) {
                     leaderboard.push({
                         id: doc.id,
-                        playerName: data.playerName,
-                        score: data.score,
-                        gameMode: data.gameMode
+                        playerName: data.playerName || data.name || '匿名玩家',
+                        score: data.score || 0,
+                        gameMode: docMode
                     });
                 }
             });
@@ -63,7 +90,33 @@ window.getLeaderboard = function(gameMode, callback) {
             callback(leaderboard);
         }).catch(function(error) {
             console.error("获取排行榜失败:", error);
-            callback([]);
+            console.error("错误代码:", error.code);
+            console.error("错误信息:", error.message);
+            // 尝试不排序直接查询
+            console.log('尝试不排序查询...');
+            db.collection("scores").limit(20).get()
+                .then(function(querySnapshot) {
+                    console.log('不排序查询成功, 文档数量:', querySnapshot.size);
+                    var leaderboard = [];
+                    querySnapshot.forEach(function(doc) {
+                        var data = doc.data();
+                        var docMode = data.gameMode || data.gamemode || data.mode;
+                        if (!gameMode || gameMode === 'all' || docMode === gameMode) {
+                            leaderboard.push({
+                                id: doc.id,
+                                playerName: data.playerName || data.name || '匿名玩家',
+                                score: data.score || 0,
+                                gameMode: docMode
+                            });
+                        }
+                    });
+                    // 手动排序
+                    leaderboard.sort(function(a, b) { return b.score - a.score; });
+                    callback(leaderboard);
+                }).catch(function(error2) {
+                    console.error("不排序查询也失败:", error2);
+                    callback([]);
+                });
         });
 }
 
