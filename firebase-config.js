@@ -135,7 +135,11 @@ window.sendPlayerMove = function(direction) {
     if (!currentGameId || !currentPlayer) return;
     
     var path = 'games/' + currentGameId + '/snake' + (currentPlayer === 'p1' ? '1' : '2') + '/direction';
-    realtimeDb.ref(path).set(direction);
+    realtimeDb.ref(path).set(direction, function(error) {
+        if (error) {
+            console.error('发送方向失败:', error);
+        }
+    });
 }
 
 // 监听游戏状态
