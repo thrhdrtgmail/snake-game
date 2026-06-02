@@ -874,12 +874,16 @@
         var onlineSnake2 = [];
         var onlineFood = { x: 10, y: 10 };
         var onlineGameLoop = null;
+        var currentRoomId = null;
         
         // 创建房间
         createRoomBtn.addEventListener('click', function() {
             var playerName = playerNameInput.value || '匿名玩家';
             
             createRoom(playerName).then(function(result) {
+                // 保存房间ID
+                currentRoomId = result.gameId;
+                
                 // 显示房间ID和复制按钮
                 onlineStatus.innerHTML = '<span class="status-waiting">🏠 房间创建成功！</span><br>';
                 onlineStatus.innerHTML += '<span class="status-online">房间ID: <code style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; color: #4ecca3;">' + result.gameId + '</code></span><br>';
@@ -1052,7 +1056,15 @@
             // 处理游戏状态
             switch(gameData.state) {
                 case 'waiting':
-                    onlineStatus.innerHTML = '<span class="status-waiting">⏳ 等待其他玩家加入...</span>';
+                    // 如果是创建房间的玩家，显示房间ID
+                    if (currentRoomId && currentPlayer === 'p1') {
+                        onlineStatus.innerHTML = '<span class="status-waiting">🏠 房间创建成功！</span><br>';
+                        onlineStatus.innerHTML += '<span class="status-online">房间ID: <code style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 5px; color: #4ecca3;">' + currentRoomId + '</code></span><br>';
+                        onlineStatus.innerHTML += '<button onclick="copyRoomId(\'' + currentRoomId + '\')" style="margin-top: 10px; padding: 8px 15px; background: #4ecca3; color: #1a1a2e; border: none; border-radius: 15px; cursor: pointer;">📋 复制房间ID</button><br>';
+                        onlineStatus.innerHTML += '<span class="status-waiting">等待其他玩家加入...</span>';
+                    } else {
+                        onlineStatus.innerHTML = '<span class="status-waiting">⏳ 等待其他玩家加入...</span>';
+                    }
                     break;
                     
                 case 'ready':
