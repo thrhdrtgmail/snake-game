@@ -634,7 +634,13 @@
             if (direction) {
                 myDirection = direction;
                 console.log('准备发送方向:', direction, 'myDirection:', myDirection);
-                sendPlayerMove(direction);
+                
+                // 确保调用全局函数
+                if (typeof window.sendPlayerMove === 'function') {
+                    window.sendPlayerMove(direction);
+                } else {
+                    console.error('sendPlayerMove 函数未找到!');
+                }
             }
         });
 
