@@ -796,10 +796,10 @@
                         onlineSnake2 = newSnake2;
                         onlineFood = newFood;
                         
-                        // 批量更新到数据库
+                        // 批量更新到数据库（不覆盖方向，只更新位置）
                         var updateData = {
-                            snake1: { segments: newSnake1, direction: dir1 },
-                            snake2: { segments: newSnake2, direction: dir2 },
+                            'snake1/segments': newSnake1,
+                            'snake2/segments': newSnake2,
                             food: newFood,
                             state: newState
                         };
@@ -807,6 +807,10 @@
                         if (p1Ate) updateData['scores/p1'] = (gameData.scores && gameData.scores.p1 || 0) + 10;
                         if (p2Ate) updateData['scores/p2'] = (gameData.scores && gameData.scores.p2 || 0) + 10;
                         
+                        // 只更新玩家1的方向（玩家2的方向由玩家2自己更新）
+                        updateData['snake1/direction'] = dir1;
+                        
+                        console.log('更新数据库:', updateData);
                         realtimeDb.ref('games/' + currentGameId).update(updateData);
                         
                     } else {
