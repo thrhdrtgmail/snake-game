@@ -727,6 +727,8 @@
                     var snake2 = gameData.snake2 || { segments: [{x: 14, y: 10}], direction: 'left' };
                     var currentFood = gameData.food || { x: 10, y: 10 };
                     
+                    console.log('游戏循环 - gameData 完整结构:', JSON.stringify(gameData, null, 2));
+                    console.log('游戏循环 - snake2 对象:', JSON.stringify(snake2));
                     console.log('游戏循环 - 读取到的方向:', snake1.direction, snake2.direction);
                     
                     // 玩家 1 负责所有游戏逻辑计算
