@@ -282,10 +282,24 @@ window.joinRoom = function(gameId, playerName) {
 
 // 设置玩家就绪状态
 window.setReady = function(ready) {
-    if (!currentGameId || !currentPlayer) return;
+    console.log('setReady 被调用 - ready:', ready, 'currentGameId:', currentGameId, 'currentPlayer:', currentPlayer);
+    
+    if (!currentGameId) {
+        console.error('setReady 失败: currentGameId 为空');
+        return;
+    }
+    if (!currentPlayer) {
+        console.error('setReady 失败: currentPlayer 为空');
+        return;
+    }
     
     var path = 'games/' + currentGameId + '/players/' + currentPlayer + '/ready';
-    realtimeDb.ref(path).set(ready);
+    console.log('设置 ready 状态到路径:', path);
+    realtimeDb.ref(path).set(ready).then(function() {
+        console.log('ready 状态设置成功!');
+    }).catch(function(error) {
+        console.error('ready 状态设置失败:', error);
+    });
 }
 
 // 发送玩家移动
